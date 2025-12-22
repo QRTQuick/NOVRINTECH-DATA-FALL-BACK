@@ -2,6 +2,14 @@
 
 A Python desktop application for interacting with the Novrintech Data Fall Back API.
 
+## 🔥 Ready to Use - No Configuration Needed!
+
+This desktop app comes pre-configured with:
+- ✅ **API URL**: `https://novrintech-data-fall-back.onrender.com`
+- ✅ **API Key**: Pre-embedded for instant testing
+- ✅ **Keep-Alive**: Automatically pings backend every 4 seconds to prevent sleep
+- ✅ **Zero Setup**: Just run and start uploading files!
+
 ## Features
 
 ### 🔥 File Management
@@ -20,28 +28,31 @@ A Python desktop application for interacting with the Novrintech Data Fall Back 
 - ✅ **Duplicate Prevention** - MD5 hash checking before upload
 - ✅ **Connection Testing** - Verify API connectivity
 - ✅ **Local History** - Persistent upload tracking
+- ✅ **Keep-Alive System** - Prevents backend from sleeping
 - ✅ **User-friendly Interface** - Tabbed layout for easy navigation
 
-## Installation
+## Quick Start
 
-1. Install Python 3.7+ if not already installed
-2. Install dependencies:
+1. **Install Python 3.7+** if not already installed
+2. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run the application:
+3. **Run the application**:
 ```bash
 python main.py
 ```
 
-## Configuration
-
-1. **API URL**: Set your backend URL (e.g., `http://localhost:8000` or your deployed URL)
-2. **API Key**: Enter your API key from the backend
-3. **Test Connection**: Verify everything works
+4. **Start using immediately** - No configuration needed!
 
 ## Usage
+
+### Instant Testing
+1. Launch the app - it's pre-configured!
+2. Go to "Configuration" tab and click "Test Connection"
+3. Start uploading files in "File Upload" tab
+4. Use "Data Operations" for JSON data storage
 
 ### File Upload
 1. Go to "File Upload" tab
@@ -55,10 +66,13 @@ python main.py
 2. **Save Data**: Enter key and JSON value, click "Save Data"
 3. **Read Data**: Enter key, click "Read Data" to retrieve
 
-### File Manager
-1. Go to "File Manager" tab
-2. View uploaded files (requires backend list endpoint)
-3. Download or view file information
+## Keep-Alive System
+
+The app automatically:
+- 🔄 Pings the backend every 4 seconds
+- 💚 Keeps the API awake and responsive
+- 📊 Shows ping status in the console
+- ⚡ Ensures fast response times
 
 ## File Tracking Features
 
@@ -68,13 +82,4 @@ python main.py
 - **Duplicate Alerts**: Warns before uploading identical content
 - **Persistent History**: Saves upload history locally in `upload_history.json`
 
-## API Integration
-
-The desktop app integrates with all backend endpoints:
-- `POST /file/upload` - File uploads
-- `GET /file/read/{file_id}` - File information
-- `POST /data/save` - Save data
-- `GET /data/read/{key}` - Read data
-- `GET /health` - Connection testing
-
-Perfect for company internal use with your Novrintech Data Fall Back backend!
+Perfect for company internal use with zero configuration required! 🚀

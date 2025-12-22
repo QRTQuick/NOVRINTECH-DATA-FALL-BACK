@@ -7,6 +7,8 @@ from datetime import datetime
 import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
+import threading
+import time
 
 # Load environment variables
 load_dotenv()
@@ -17,15 +19,23 @@ class NovrintechDesktopApp:
         self.root.title("Novrintech Data Fall Back - Desktop Client")
         self.root.geometry("800x600")
         
-        # API Configuration from environment variables
-        self.api_base_url = os.getenv("COMPANY_API_URL", "https://your-deployed-backend-url.com")
-        self.api_key = os.getenv("COMPANY_API_KEY", "novrintech_api_key_2024_secure")
+        # Handle window close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # API Configuration - Embedded for easy testing
+        self.api_base_url = "https://novrintech-data-fall-back.onrender.com"
+        self.api_key = "novrintech_api_key_2024_secure"
         
         # File tracking
         self.uploaded_files = {}
         self.load_file_history()
         
+        # Keep-alive system
+        self.keep_alive_running = False
+        self.keep_alive_thread = None
+        
         self.setup_ui()
+        self.start_keep_alive()
     
     def setup_ui(self):
         # Main notebook for tabs
@@ -58,13 +68,13 @@ class NovrintechDesktopApp:
         # API URL
         ttk.Label(parent, text="API Base URL:").pack(anchor=tk.W, padx=20)
         self.url_entry = ttk.Entry(parent, width=60)
-        self.url_entry.insert(0, self.api_base_url)  # From environment
+        self.url_entry.insert(0, "https://novrintech-data-fall-back.onrender.com")  # Embedded URL
         self.url_entry.pack(padx=20, pady=5)
         
         # API Key
         ttk.Label(parent, text="API Key:").pack(anchor=tk.W, padx=20)
         self.key_entry = ttk.Entry(parent, width=60, show="*")
-        self.key_entry.insert(0, self.api_key)  # From environment
+        self.key_entry.insert(0, "novrintech_api_key_2024_secure")  # Embedded key
         self.key_entry.pack(padx=20, pady=5)
         
         # Test Connection
@@ -73,6 +83,10 @@ class NovrintechDesktopApp:
         # Status
         self.status_label = ttk.Label(parent, text="Status: Not connected", foreground="red")
         self.status_label.pack(pady=5)
+        
+        # Keep-alive status
+        self.keepalive_label = ttk.Label(parent, text="Keep-alive: Active (prevents backend sleep)", foreground="green")
+        self.keepalive_label.pack(pady=5)
     
     def setup_upload_tab(self, parent):
         ttk.Label(parent, text="File Upload", font=("Arial", 14, "bold")).pack(pady=10)
@@ -176,6 +190,37 @@ class NovrintechDesktopApp:
         ttk.Label(read_frame, text="Result:").pack(anchor=tk.W, padx=10)
         self.result_text = scrolledtext.ScrolledText(read_frame, height=8, width=60)
         self.result_text.pack(padx=10, pady=5)
+    
+    def start_keep_alive(self):
+        """Start keep-alive pinging to prevent backend from sleeping"""
+        if not self.keep_alive_running:
+            self.keep_alive_running = True
+            self.keep_alive_thread = threading.Thread(target=self.keep_alive_worker, daemon=True)
+            self.keep_alive_thread.start()
+            print("🔄 Keep-alive started - pinging backend every 4 seconds")
+    
+    def stop_keep_alive(self):
+        """Stop keep-alive pinging"""
+        self.keep_alive_running = False
+        if self.keep_alive_thread:
+            self.keep_alive_thread.join(timeout=1)
+        print("⏹️ Keep-alive stopped")
+    
+    def keep_alive_worker(self):
+        """Background worker that pings the backend every 4 seconds"""
+        while self.keep_alive_running:
+            try:
+                # Ping the backend health endpoint
+                response = requests.get(f"{self.api_base_url}/health", timeout=3)
+                if response.status_code == 200:
+                    print(f"💚 Keep-alive ping successful: {datetime.now().strftime('%H:%M:%S')}")
+                else:
+                    print(f"⚠️ Keep-alive ping returned: {response.status_code}")
+            except Exception as e:
+                print(f"❌ Keep-alive ping failed: {e}")
+            
+            # Wait 4 seconds before next ping
+            time.sleep(4)
     
     def get_file_hash(self, filepath):
         """Generate MD5 hash of file for duplicate detection"""
@@ -395,6 +440,12 @@ class NovrintechDesktopApp:
         except requests.exceptions.RequestException as e:
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert("1.0", f"Error: {str(e)}")
+    
+    def on_closing(self):
+        """Handle application closing"""
+        print("🔄 Shutting down Novrintech Desktop Client...")
+        self.stop_keep_alive()
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()

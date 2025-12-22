@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Default API Configuration from environment
-DEFAULT_API_URL = os.getenv("COMPANY_API_URL", "https://your-deployed-backend-url.com")
-DEFAULT_API_KEY = os.getenv("COMPANY_API_KEY", "novrintech_api_key_2024_secure")
+# Embedded API Configuration - Ready to use!
+DEFAULT_API_URL = "https://novrintech-data-fall-back.onrender.com"
+DEFAULT_API_KEY = "novrintech_api_key_2024_secure"
 
 # File Upload Settings
 MAX_FILE_SIZE_MB = 100  # Maximum file size in MB
