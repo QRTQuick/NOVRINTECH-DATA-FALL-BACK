@@ -35,12 +35,12 @@ async def startup_event():
         print("✅ Database initialized successfully")
         
         # Start keep-alive service
-        if settings.KEEP_ALIVE_ENABLED:
-            keep_alive_service.start()
-            print(f"✅ Keep-alive service started (interval: {settings.KEEP_ALIVE_INTERVAL}s)")
+        keep_alive_service.start()
+        print(f"🔄 Keep-alive service started (pings every 4 seconds)")
         
         print("🔥 Novrintech Data Fall Back API started successfully!")
         print(f"📡 API running on {settings.API_HOST}:{settings.API_PORT}")
+        print(f"🌐 External URL: https://novrintech-data-fall-back.onrender.com")
         
     except Exception as e:
         print(f"❌ Startup error: {e}")
