@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Any, Dict
-from app.core.database import get_db
-from app.services.postgres_service import PostgresService
+from app.core.database import get_async_db
+from app.services.async_postgres_service import AsyncPostgresService
 from app.services.sync_service import SyncService
 
 router = APIRouter()
@@ -19,16 +19,16 @@ class DataUpdateRequest(BaseModel):
 async def save_data(
     request: Request,
     data: DataSaveRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Save data to PostgreSQL and sync to Firebase"""
     app_id = request.state.app_id
     
-    postgres_service = PostgresService(db)
+    postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
     
     # Save to PostgreSQL
-    result = postgres_service.save_data(app_id, data.data_key, data.data_value)
+    result = await postgres_service.save_data(app_id, data.data_key, data.data_value)
     
     # Sync to Firebase
     sync_service.sync_to_firebase(app_id, data.data_key, data.data_value)
@@ -44,17 +44,17 @@ async def save_data(
 async def read_data(
     request: Request,
     data_key: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Read data from PostgreSQL with Firebase fallback"""
     app_id = request.state.app_id
     
-    postgres_service = PostgresService(db)
+    postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
     
     # Try PostgreSQL first
     try:
-        result = postgres_service.get_data(app_id, data_key)
+        result = await postgres_service.get_data(app_id, data_key)
         if result:
             return {
                 "success": True,
@@ -84,16 +84,16 @@ async def update_data(
     request: Request,
     data_key: str,
     data: DataUpdateRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update data in PostgreSQL and sync to Firebase"""
     app_id = request.state.app_id
     
-    postgres_service = PostgresService(db)
+    postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
     
     # Update PostgreSQL
-    result = postgres_service.update_data(app_id, data_key, data.data_value)
+    result = await postgres_service.update_data(app_id, data_key, data.data_value)
     
     if not result:
         raise HTTPException(
@@ -115,16 +115,16 @@ async def update_data(
 async def delete_data(
     request: Request,
     data_key: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete data from PostgreSQL and Firebase"""
     app_id = request.state.app_id
     
-    postgres_service = PostgresService(db)
+    postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
     
     # Delete from PostgreSQL
-    success = postgres_service.delete_data(app_id, data_key)
+    success = await postgres_service.delete_data(app_id, data_key)
     
     if not success:
         raise HTTPException(

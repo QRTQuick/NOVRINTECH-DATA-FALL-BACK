@@ -42,7 +42,7 @@ app.add_middleware(APIKeyMiddleware)
 @app.on_event("startup")
 async def startup_event():
     try:
-        init_db()
+        await init_db()
         # Start keep-alive service
         keep_alive_service.start()
         print("✅ Novrintech Data Fall Back API started successfully!")
