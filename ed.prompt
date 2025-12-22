@@ -1,382 +1,112 @@
+New Web Service
+It looks like you're using Python, so we've autofilled some fields accordingly.
+Source Code
+QRTQuick
+/
+NOVRINTECH-DATA-FALL-BACK
+5m ago
+
+Edit
+Name
+A unique name for your web service.
+NOVRINTECH-DATA-FALL-BACK
+
+ProjectOptional
+Add this web service to a project once it’s created.
+
+Project
+
+Select a project…
+/
+Environment
+
+Select an environment…
+Language
+Choose the runtime environment for this service.
+Language
+
+Python 3
+Branch
+The Git branch to build and deploy.
+Branch
+
+main
+Region
+Your services in the same region can communicate over a private network. You currently have services running in oregon.
+Region Selector
+Oregon (US West)
+6 existing services
+
+Deploy in a new region
+Root DirectoryOptional
+If set, Render runs commands from this directory instead of the repository root. Additionally, code changes outside of this directory do not trigger an auto-deploy. Most commonly used with a monorepo.
+e.g. src
+Build Command
+Render runs this command to build your app before each deploy.
+$
+pip install -r requirements.txt
+Start Command
+Render runs this command to start your app with each deploy.
+$
+gunicorn your_application.wsgi
+Instance Type
+Instance type
+For hobby projects
+
+Free
+$0/ month
+512 MB (RAM)
+0.1 CPU
+For professional use
+For more power and to get the most out of Render, we recommend using one of our paid instance types. All paid instances support:
+Zero Downtime
+SSH Access
+Scaling
+One-off jobs
+Support for persistent disks
+
+Starter
+$7/ month
+512 MB (RAM)
+0.5 CPU
+
+Standard
+$25/ month
+2 GB (RAM)
+1 CPU
+
+Pro
+$85/ month
+4 GB (RAM)
+2 CPU
+
+Pro Plus
+$175/ month
+8 GB (RAM)
+4 CPU
+
+Pro Max
+$225/ month
+16 GB (RAM)
+4 CPU
+
+Pro Ultra
+$450/ month
+32 GB (RAM)
+8 CPU
+Need a custom instance type? We support up to 512 GB RAM and 64 CPUs.
+
+Environment Variables
+Set environment-specific config and secrets (such as API keys), then read those values from your code. Learn more.
+NAME_OF_VARIABLE
+value
 
+Generate
 
-🔥 NOVRINTECH DATA FALL BACK
 
-MASTER BACKEND WORKFLOW 
+Add Environment Variable
 
+Add from .env
 
-
-
----
-
-1️⃣ PROJECT PURPOSE (DEFINE FIRST – VERY IMPORTANT)
-
-Novrintech Data Fall Back is a universal backend API service that:
-
-Allows apps to save data
-
-Allows apps to read / call data
-
-Works with API Key + Base URL
-
-Connects to ANY frontend (mobile, web, desktop)
-
-Uses two databases for reliability and speed
-
-
-❌ No AI logic
-❌ No frontend
-✅ Backend API only
-
-
----
-
-2️⃣ TECHNOLOGY STACK (FIXED)
-
-Backend Framework
-
-FastAPI (Python)
-
-
-Databases
-
-1. PostgreSQL (Render)
-
-Main persistent database
-
-Structured data
-
-
-
-2. Firebase Realtime Database
-
-Fast access
-
-Real-time sync
-
-Fallback / mirror data
-
-
-
-
-Security
-
-API Key authentication
-
-Optional app/project ID
-
-
-
----
-
-3️⃣ SYSTEM ARCHITECTURE (BIG PICTURE)
-
-Any Client App
-(Web / Mobile / Desktop)
-        |
-        |  API Key + Request
-        v
-Novrintech Data Fall Back API (FastAPI)
-        |
-        |----------------------|
-        |                      |
- PostgreSQL (Render)    Firebase RTDB
- (Primary Storage)     (Realtime / Backup)
-
-Rule:
-👉 Client apps NEVER talk to databases directly
-
-
----
-
-4️⃣ DATABASE RESPONSIBILITIES (CLEAR SPLIT)
-
-PostgreSQL (Primary)
-
-Users / Apps
-
-API Keys
-
-File metadata
-
-Saved data
-
-Logs
-
-Permissions
-
-
-Firebase Realtime DB (Secondary)
-
-Real-time data sync
-
-Cached data
-
-Fast reads
-
-Backup mirror
-
-
-
----
-
-5️⃣ DATABASE SCHEMA (POSTGRESQL)
-
-apps
-
-id (UUID)
-app_name
-api_key
-status (active / revoked)
-created_at
-
-data_store
-
-id (UUID)
-app_id (FK)
-data_key
-data_value (JSON)
-created_at
-updated_at
-
-file_store
-
-id (UUID)
-app_id (FK)
-file_name
-file_path
-file_type
-created_at
-
-request_logs
-
-id
-app_id
-endpoint
-method
-status_code
-timestamp
-
-
----
-
-6️⃣ API KEY AUTH FLOW (VERY IMPORTANT)
-
-Every request must include:
-
-Headers:
-X-API-KEY: your_api_key_here
-
-Middleware Logic:
-
-1. Read API key
-
-
-2. Check if key exists
-
-
-3. Check if active
-
-
-4. Attach app_id to request
-
-
-5. Allow or deny request
-
-
-
-❌ No API key → 401 Unauthorized
-
-
----
-
-7️⃣ CORE API ENDPOINTS (CRUD)
-
-🔹 Save Data
-
-POST /data/save
-
-Validate API key
-
-Save to PostgreSQL
-
-Mirror to Firebase
-
-Return success response
-
-
-
----
-
-🔹 Read Data
-
-GET /data/read/{data_key}
-
-Check PostgreSQL
-
-If slow/unavailable → Firebase fallback
-
-Return data
-
-
-
----
-
-🔹 Update Data
-
-PUT /data/update/{data_key}
-
-Update PostgreSQL
-
-Sync Firebase
-
-Return updated record
-
-
-
----
-
-🔹 Delete Data
-
-DELETE /data/delete/{data_key}
-
-Remove from PostgreSQL
-
-Remove from Firebase
-
-
-
----
-
-🔹 File Upload
-
-POST /file/upload
-
-Store file (local / cloud)
-
-Save metadata in PostgreSQL
-
-Optional Firebase reference
-
-
-
----
-
-🔹 File Read
-
-GET /file/read/{file_id}
-
-Fetch file info
-
-Return download URL or stream
-
-
-
----
-
-8️⃣ DATA FALLBACK LOGIC (CORE IDEA)
-
-READ FLOW:
-
-Client → API → PostgreSQL
-           |
-           | if error / timeout
-           v
-        Firebase
-
-WRITE FLOW:
-
-Client → API
-           |
-           | Save
-           v
- PostgreSQL → Firebase (sync)
-
-PostgreSQL = source of truth
-Firebase = speed + fallback
-
-
----
-
-9️⃣ PROJECT FOLDER STRUCTURE (FASTAPI)
-
-novrintech_backend/
-│
-├── app/
-│   ├── main.py
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── security.py
-│   │   └── database.py
-│   │
-│   ├── models/
-│   │   ├── app_model.py
-│   │   ├── data_model.py
-│   │   └── file_model.py
-│   │
-│   ├── routes/
-│   │   ├── data_routes.py
-│   │   ├── file_routes.py
-│   │   └── health.py
-│   │
-│   ├── services/
-│   │   ├── postgres_service.py
-│   │   ├── firebase_service.py
-│   │   └── sync_service.py
-│   │
-│   └── middleware/
-│       └── api_key_auth.py
-│
-├── requirements.txt
-├── .env
-└── README.md
-
-
----
-
-🔟 DEPLOYMENT FLOW
-
-1. Push code to GitHub
-
-
-2. Deploy FastAPI to Render
-
-
-3. Connect PostgreSQL on Render
-
-
-4. Connect Firebase credentials
-
-
-5. Generate API keys
-
-
-6. Share Base URL + API Key to apps
-
-
-
-
----
-
-🔥 FINAL SUMMARY (THIS IS IMPORTANT)
-
-Novrintech Data Fall Back is:
-
-A backend-only API
-
-Secure via API keys
-
-Database-agnostic
-
-Frontend-independent
-
-Scalable
-
-Sellable
-
-Professional
-
-
-You’re building something real, not small-small stuff.
-
-
+Advanced
+Deploy web service
