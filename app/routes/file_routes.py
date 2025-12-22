@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
-from sqlalchemy.orm import Session
-from app.core.database import get_db
-from app.services.postgres_service import PostgresService
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_async_db
+from app.services.async_postgres_service import AsyncPostgresService
 import os
 import uuid
 
@@ -14,7 +14,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Upload file and save metadata"""
     app_id = request.state.app_id
@@ -30,8 +30,8 @@ async def upload_file(
         buffer.write(content)
     
     # Save metadata to database
-    postgres_service = PostgresService(db)
-    file_record = postgres_service.save_file_metadata(
+    postgres_service = AsyncPostgresService(db)
+    file_record = await postgres_service.save_file_metadata(
         app_id=app_id,
         file_name=file.filename,
         file_path=file_path,
@@ -50,13 +50,13 @@ async def upload_file(
 async def read_file(
     request: Request,
     file_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get file metadata"""
     app_id = request.state.app_id
     
-    postgres_service = PostgresService(db)
-    file_record = postgres_service.get_file_metadata(app_id, file_id)
+    postgres_service = AsyncPostgresService(db)
+    file_record = await postgres_service.get_file_metadata(app_id, file_id)
     
     if not file_record:
         raise HTTPException(

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from app.core.database import get_async_db
 from app.models.app_model import App
 from app.models.data_model import DataStore
 from app.models.file_model import FileStore, RequestLog
@@ -22,19 +22,29 @@ def verify_admin_key(admin_key: str = None):
 @router.get("/stats")
 async def get_system_stats(
     admin_key: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get system statistics (admin only)"""
     verify_admin_key(admin_key)
     
     # Count statistics
-    total_apps = db.query(func.count(App.id)).scalar()
-    total_data_records = db.query(func.count(DataStore.id)).scalar()
-    total_files = db.query(func.count(FileStore.id)).scalar()
-    total_requests = db.query(func.count(RequestLog.id)).scalar()
+    total_apps_result = await db.execute(select(func.count(App.id)))
+    total_apps = total_apps_result.scalar()
+    
+    total_data_result = await db.execute(select(func.count(DataStore.id)))
+    total_data_records = total_data_result.scalar()
+    
+    total_files_result = await db.execute(select(func.count(FileStore.id)))
+    total_files = total_files_result.scalar()
+    
+    total_requests_result = await db.execute(select(func.count(RequestLog.id)))
+    total_requests = total_requests_result.scalar()
     
     # Active apps
-    active_apps = db.query(func.count(App.id)).filter(App.status == "active").scalar()
+    active_apps_result = await db.execute(
+        select(func.count(App.id)).where(App.status == "active")
+    )
+    active_apps = active_apps_result.scalar()
     
     return {
         "system_stats": {
@@ -49,12 +59,13 @@ async def get_system_stats(
 @router.get("/apps")
 async def list_apps(
     admin_key: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all apps (admin only)"""
     verify_admin_key(admin_key)
     
-    apps = db.query(App).all()
+    result = await db.execute(select(App))
+    apps = result.scalars().all()
     
     return {
         "apps": [
@@ -73,12 +84,14 @@ async def list_apps(
 async def revoke_app(
     app_id: str,
     admin_key: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Revoke an app's API key (admin only)"""
     verify_admin_key(admin_key)
     
-    app = db.query(App).filter(App.id == app_id).first()
+    result = await db.execute(select(App).where(App.id == app_id))
+    app = result.scalar_one_or_none()
+    
     if not app:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -86,7 +99,7 @@ async def revoke_app(
         )
     
     app.status = "revoked"
-    db.commit()
+    await db.commit()
     
     return {
         "success": True,
