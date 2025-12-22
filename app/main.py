@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.routes import data_routes, file_routes, health
 from app.middleware.api_key_auth import APIKeyMiddleware
+from app.services.keep_alive import keep_alive_service
 
 app = FastAPI(
     title="Novrintech Data Fall Back API",
@@ -27,6 +28,13 @@ app.add_middleware(APIKeyMiddleware)
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    # Start keep-alive service
+    keep_alive_service.start()
+
+# Cleanup on shutdown
+@app.on_event("shutdown")
+async def shutdown_event():
+    keep_alive_service.stop()
 
 # Include routers
 app.include_router(health.router, tags=["Health"])

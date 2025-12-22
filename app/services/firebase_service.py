@@ -15,7 +15,7 @@ class FirebaseService:
             if os.path.exists(settings.FIREBASE_CREDENTIALS_PATH):
                 cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
                 firebase_admin.initialize_app(cred, {
-                    'databaseURL': 'https://your-project-id.firebaseio.com'  # Update with your Firebase URL
+                    'databaseURL': 'https://novrintech-data-fall-back-default-rtdb.firebaseio.com/'
                 })
                 self.is_initialized = True
             else:

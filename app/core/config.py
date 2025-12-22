@@ -13,6 +13,15 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     DEBUG: bool = False
     
+    # Database Performance
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    
+    # Keep-Alive
+    KEEP_ALIVE_ENABLED: bool = True
+    KEEP_ALIVE_INTERVAL: int = 4  # seconds
+    KEEP_ALIVE_URL: Optional[str] = None  # Auto-generated if None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
