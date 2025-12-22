@@ -2,13 +2,28 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from app.core.config import settings
 
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from app.core.config import settings
+from urllib.parse import urlparse, urlunparse
+
 # Async engine only (asyncpg) - works perfectly with Python 3.13
-async_database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-# Remove sslmode and channel_binding for asyncpg compatibility
-if "sslmode=" in async_database_url:
-    # Convert Neon URL to asyncpg compatible format
-    async_database_url = async_database_url.split("?")[0]  # Remove query parameters
+def convert_to_asyncpg_url(database_url: str) -> str:
+    """Convert PostgreSQL URL to asyncpg compatible format"""
+    # Parse the URL
+    parsed = urlparse(database_url)
     
+    # Replace scheme
+    new_scheme = "postgresql+asyncpg"
+    
+    # Remove query parameters that asyncpg doesn't support
+    new_parsed = parsed._replace(scheme=new_scheme, query="")
+    
+    return urlunparse(new_parsed)
+
+async_database_url = convert_to_asyncpg_url(settings.DATABASE_URL)
+print(f"🔗 Converted URL: {async_database_url}")
+
 async_engine = create_async_engine(
     async_database_url, 
     echo=False,
