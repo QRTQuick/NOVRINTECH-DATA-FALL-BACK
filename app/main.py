@@ -42,12 +42,26 @@ app.add_middleware(APIKeyMiddleware)
 @app.on_event("startup")
 async def startup_event():
     try:
+        print("🚀 Starting Novrintech Data Fall Back API...")
+        print(f"📊 Database URL: {settings.DATABASE_URL[:50]}...")
+        
         await init_db()
+        print("✅ Database initialized successfully")
+        
         # Start keep-alive service
-        keep_alive_service.start()
-        print("✅ Novrintech Data Fall Back API started successfully!")
+        if settings.KEEP_ALIVE_ENABLED:
+            keep_alive_service.start()
+            print(f"✅ Keep-alive service started (interval: {settings.KEEP_ALIVE_INTERVAL}s)")
+        
+        print("🔥 Novrintech Data Fall Back API started successfully!")
+        print(f"📡 API running on {settings.API_HOST}:{settings.API_PORT}")
+        
     except Exception as e:
         print(f"❌ Startup error: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't raise - let the app start anyway
+        print("⚠️ Starting with limited functionality...")
 
 # Cleanup on shutdown
 @app.on_event("shutdown")
@@ -69,5 +83,12 @@ async def root():
     return {
         "service": "Novrintech Data Fall Back API",
         "status": "active",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "message": "🔥 API is running successfully!",
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "data": "/data/*",
+            "files": "/file/*"
+        }
     }
