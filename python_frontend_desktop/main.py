@@ -562,17 +562,6 @@ class NovrintechDesktopApp:
             messagebox.showerror("Error", "Connection failed. Check your internet connection and API URL.")
         except requests.exceptions.RequestException as e:
             messagebox.showerror("Error", f"Upload error: {str(e)}")
-                messagebox.showerror("Server Error", error_msg)
-            
-            else:
-                messagebox.showerror("Error", f"Upload failed: {response.status_code}\n{response.text}")
-        
-        except requests.exceptions.Timeout:
-            messagebox.showerror("Error", "Upload timed out. The file might be too large or the server is slow.")
-        except requests.exceptions.ConnectionError:
-            messagebox.showerror("Error", "Connection failed. Check your internet connection and API URL.")
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror("Error", f"Upload error: {str(e)}")
     
     def refresh_files(self):
         """Refresh files list from backend"""
