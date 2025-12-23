@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     DEBUG: bool = False
     
+    # Company API (for frontend)
+    COMPANY_API_URL: Optional[str] = None
+    COMPANY_API_KEY: Optional[str] = None
+    
     # Database Performance
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
@@ -25,5 +29,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields
 
 settings = Settings()

@@ -12,9 +12,22 @@ def convert_to_asyncpg_url(database_url: str) -> str:
     # Replace scheme
     new_scheme = "postgresql+asyncpg"
     
-    # Keep all query parameters for Neon (sslmode, channel_binding)
-    # Don't remove query parameters as they're needed for Neon
-    new_parsed = parsed._replace(scheme=new_scheme)
+    # Remove Neon-specific query parameters that asyncpg doesn't support
+    # Keep only the essential ones
+    query_params = []
+    if parsed.query:
+        for param in parsed.query.split('&'):
+            if param.startswith('sslmode='):
+                # Convert sslmode to asyncpg format
+                continue  # asyncpg handles SSL automatically for Neon
+            elif param.startswith('channel_binding='):
+                # Remove channel_binding as asyncpg doesn't support it
+                continue
+            else:
+                query_params.append(param)
+    
+    new_query = '&'.join(query_params) if query_params else ""
+    new_parsed = parsed._replace(scheme=new_scheme, query=new_query)
     
     return urlunparse(new_parsed)
 
@@ -29,11 +42,7 @@ async_engine = create_async_engine(
     max_overflow=10,  # Smaller overflow for Neon
     pool_pre_ping=True,  # Important for Neon - checks connections
     pool_recycle=3600,  # Recycle connections every hour
-    connect_args={
-        "server_settings": {
-            "application_name": "novrintech_data_fall_back",
-        }
-    }
+    # SSL is handled automatically by asyncpg for Neon
 )
 AsyncSessionLocal = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 

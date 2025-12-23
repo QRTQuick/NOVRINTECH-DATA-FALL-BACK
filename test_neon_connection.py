@@ -24,8 +24,13 @@ async def test_neon_database():
     
     print(f"📊 Database: {database_url[:50]}...")
     
-    # Convert to asyncpg format
+    # Convert to asyncpg format (remove unsupported parameters)
     async_url = re.sub(r'^postgresql:', 'postgresql+asyncpg:', database_url)
+    # Remove sslmode and channel_binding parameters
+    async_url = re.sub(r'[?&]sslmode=[^&]*', '', async_url)
+    async_url = re.sub(r'[?&]channel_binding=[^&]*', '', async_url)
+    # Clean up any trailing ? or &
+    async_url = re.sub(r'[?&]$', '', async_url)
     
     try:
         # Create engine
