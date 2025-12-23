@@ -31,8 +31,17 @@ async def startup_event():
         print("🚀 Starting Novrintech Data Fall Back API...")
         print(f"📊 Database URL: {settings.DATABASE_URL[:50]}...")
         
+        # Test database connection first
+        from app.core.database import test_db_connection
+        if not await test_db_connection():
+            print("⚠️ Database connection failed, but continuing startup...")
+        
+        # Initialize database tables
         await init_db()
         print("✅ Database initialized successfully")
+        
+        # Create default app for testing if it doesn't exist
+        await create_default_app_if_missing()
         
         # Start keep-alive service
         keep_alive_service.start()
@@ -48,6 +57,40 @@ async def startup_event():
         traceback.print_exc()
         # Don't raise - let the app start anyway
         print("⚠️ Starting with limited functionality...")
+
+async def create_default_app_if_missing():
+    """Create default app for testing if it doesn't exist"""
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.models.app_model import App, AppStatus
+        from sqlalchemy import select
+        import uuid
+        
+        async with AsyncSessionLocal() as db:
+            # Check if default app exists
+            default_app_id = "00000000-0000-0000-0000-000000000000"
+            result = await db.execute(
+                select(App).where(App.id == uuid.UUID(default_app_id))
+            )
+            existing_app = result.scalar_one_or_none()
+            
+            if not existing_app:
+                # Create default app
+                default_app = App(
+                    id=uuid.UUID(default_app_id),
+                    app_name="Default Test App",
+                    api_key="novrintech_api_key_2024_secure",
+                    status=AppStatus.active
+                )
+                db.add(default_app)
+                await db.commit()
+                print("✅ Created default app for testing")
+            else:
+                print("✅ Default app already exists")
+                
+    except Exception as e:
+        print(f"⚠️ Could not create default app: {e}")
+        # Don't fail startup for this
 
 # Cleanup on shutdown
 @app.on_event("shutdown")
