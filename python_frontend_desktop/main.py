@@ -16,8 +16,22 @@ load_dotenv()
 class NovrintechDesktopApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Novrintech Data Fall Back - Desktop Client")
-        self.root.geometry("900x700")
+        self.root.title("Novrintech Data Fall Back - Desktop Client v2.0")
+        
+        # Get screen dimensions for responsive sizing
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate responsive window size (80% of screen, min 1000x700, max 1400x900)
+        window_width = max(1000, min(1400, int(screen_width * 0.8)))
+        window_height = max(700, min(900, int(screen_height * 0.8)))
+        
+        # Center window on screen
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        self.root.minsize(900, 600)  # Minimum size
         
         # Set modern theme colors
         self.bg_color = "#f0f0f0"
@@ -44,52 +58,168 @@ class NovrintechDesktopApp:
         self.keep_alive_running = False
         self.keep_alive_thread = None
         
+        # Setup menu bar first
+        self.setup_menu_bar()
+        
         self.setup_ui()
         self.start_keep_alive()
+    
+    def setup_menu_bar(self):
+        """Setup the application menu bar"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="📁 Browse & Upload File...", command=self.menu_upload_file, accelerator="Ctrl+O")
+        file_menu.add_separator()
+        file_menu.add_command(label="🔄 Refresh File List", command=self.refresh_files, accelerator="F5")
+        file_menu.add_command(label="📥 Download Selected", command=self.download_file, accelerator="Ctrl+D")
+        file_menu.add_separator()
+        file_menu.add_command(label="🚪 Exit", command=self.on_closing, accelerator="Ctrl+Q")
+        
+        # Edit Menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="📋 Select All Files", command=self.select_all_files, accelerator="Ctrl+A")
+        edit_menu.add_command(label="🗑️ Delete Selected", command=self.delete_file, accelerator="Del")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="⚙️ Preferences...", command=self.show_preferences)
+        
+        # View Menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="📊 Configuration", command=lambda: self.notebook.select(0))
+        view_menu.add_command(label="📁 File Upload", command=lambda: self.notebook.select(1))
+        view_menu.add_command(label="📂 File Manager", command=lambda: self.notebook.select(2))
+        view_menu.add_command(label="💾 Data Operations", command=lambda: self.notebook.select(3))
+        view_menu.add_separator()
+        view_menu.add_command(label="🔍 Zoom In", command=self.zoom_in, accelerator="Ctrl++")
+        view_menu.add_command(label="🔍 Zoom Out", command=self.zoom_out, accelerator="Ctrl+-")
+        view_menu.add_command(label="🔍 Reset Zoom", command=self.reset_zoom, accelerator="Ctrl+0")
+        
+        # Tools Menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="🔗 Test Connection", command=self.test_connection)
+        tools_menu.add_command(label="🧹 Clear Upload History", command=self.clear_upload_history)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="📊 Show Statistics", command=self.show_statistics)
+        tools_menu.add_command(label="📋 Export File List", command=self.export_file_list)
+        
+        # Help Menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="⌨️ Keyboard Shortcuts", command=self.show_shortcuts)
+        help_menu.add_command(label="📖 User Guide", command=self.show_user_guide)
+        help_menu.add_separator()
+        help_menu.add_command(label="ℹ️ About", command=self.show_about)
+        
+        # Bind keyboard shortcuts
+        self.setup_keyboard_shortcuts()
+    
+    def setup_keyboard_shortcuts(self):
+        """Setup global keyboard shortcuts"""
+        self.root.bind("<Control-o>", lambda e: self.menu_upload_file())
+        self.root.bind("<Control-q>", lambda e: self.on_closing())
+        self.root.bind("<F5>", lambda e: self.refresh_files())
+        self.root.bind("<Control-d>", lambda e: self.download_file())
+        self.root.bind("<Control-a>", lambda e: self.select_all_files())
+        self.root.bind("<Delete>", lambda e: self.delete_file())
+        self.root.bind("<Control-plus>", lambda e: self.zoom_in())
+        self.root.bind("<Control-minus>", lambda e: self.zoom_out())
+        self.root.bind("<Control-0>", lambda e: self.reset_zoom())
     
     def setup_ui(self):
         # Create custom style
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Configure custom styles
-        style.configure('Title.TLabel', font=('Arial', 16, 'bold'), background=self.bg_color, foreground=self.primary_color)
-        style.configure('Heading.TLabel', font=('Arial', 12, 'bold'), background=self.bg_color, foreground=self.text_color)
-        style.configure('Success.TLabel', font=('Arial', 10), background=self.bg_color, foreground=self.success_color)
-        style.configure('Error.TLabel', font=('Arial', 10), background=self.bg_color, foreground=self.danger_color)
-        style.configure('Primary.TButton', font=('Arial', 10, 'bold'))
+        # Configure custom styles with responsive font sizes
+        base_font_size = 10
+        if self.root.winfo_screenwidth() > 1600:
+            base_font_size = 12
+        elif self.root.winfo_screenwidth() < 1200:
+            base_font_size = 9
         
-        # Main container with padding
-        main_container = ttk.Frame(self.root, padding="20")
+        style.configure('Title.TLabel', font=('Arial', base_font_size + 6, 'bold'), background=self.bg_color, foreground=self.primary_color)
+        style.configure('Heading.TLabel', font=('Arial', base_font_size + 2, 'bold'), background=self.bg_color, foreground=self.text_color)
+        style.configure('Success.TLabel', font=('Arial', base_font_size), background=self.bg_color, foreground=self.success_color)
+        style.configure('Error.TLabel', font=('Arial', base_font_size), background=self.bg_color, foreground=self.danger_color)
+        style.configure('Primary.TButton', font=('Arial', base_font_size, 'bold'))
+        
+        # Main container with responsive padding
+        padding = "15" if self.root.winfo_screenwidth() < 1200 else "20"
+        main_container = ttk.Frame(self.root, padding=padding)
         main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Title
-        title_label = ttk.Label(main_container, text="🔥 Novrintech Data Fall Back", style='Title.TLabel')
-        title_label.pack(pady=(0, 20))
+        # Title with status bar
+        title_frame = ttk.Frame(main_container)
+        title_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Main notebook for tabs
-        notebook = ttk.Notebook(main_container)
-        notebook.pack(fill=tk.BOTH, expand=True)
+        title_label = ttk.Label(title_frame, text="🔥 Novrintech Data Fall Back", style='Title.TLabel')
+        title_label.pack(side=tk.LEFT)
+        
+        # Status indicator
+        self.connection_status = ttk.Label(title_frame, text="🔴 Disconnected", font=('Arial', 8))
+        self.connection_status.pack(side=tk.RIGHT)
+        
+        # Create scrollable main content
+        self.create_scrollable_content(main_container)
+    
+    def create_scrollable_content(self, parent):
+        """Create scrollable content area for better responsiveness"""
+        # Create canvas and scrollbar for scrollable content
+        canvas = tk.Canvas(parent, bg=self.bg_color, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mousewheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Main notebook for tabs in scrollable area
+        self.notebook = ttk.Notebook(scrollable_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Configuration Tab
-        config_frame = ttk.Frame(notebook, padding="20")
-        notebook.add(config_frame, text="⚙️ Configuration")
+        config_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(config_frame, text="⚙️ Configuration")
         self.setup_config_tab(config_frame)
         
         # File Upload Tab
-        upload_frame = ttk.Frame(notebook, padding="20")
-        notebook.add(upload_frame, text="📁 File Upload")
+        upload_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(upload_frame, text="📁 File Upload")
         self.setup_upload_tab(upload_frame)
         
         # File Manager Tab
-        manager_frame = ttk.Frame(notebook, padding="20")
-        notebook.add(manager_frame, text="📂 File Manager")
+        manager_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(manager_frame, text="📂 File Manager")
         self.setup_manager_tab(manager_frame)
         
         # Data Operations Tab
-        data_frame = ttk.Frame(notebook, padding="20")
-        notebook.add(data_frame, text="💾 Data Operations")
+        data_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(data_frame, text="💾 Data Operations")
         self.setup_data_tab(data_frame)
+        
+        # Store references for menu actions
+        self.canvas = canvas
+        self.scrollable_frame = scrollable_frame
     
     def setup_config_tab(self, parent):
         # Header
@@ -343,10 +473,14 @@ class NovrintechDesktopApp:
                 response = requests.get(f"{self.api_base_url}/health", timeout=3)
                 if response.status_code == 200:
                     print(f"💚 Keep-alive ping successful: {datetime.now().strftime('%H:%M:%S')}")
+                    # Update connection status on main thread
+                    self.root.after(0, lambda: self.connection_status.config(text="🟢 Online", foreground="green"))
                 else:
                     print(f"⚠️ Keep-alive ping returned: {response.status_code}")
+                    self.root.after(0, lambda: self.connection_status.config(text="🟡 Issues", foreground="orange"))
             except Exception as e:
                 print(f"❌ Keep-alive ping failed: {e}")
+                self.root.after(0, lambda: self.connection_status.config(text="🔴 Offline", foreground="red"))
             
             # Wait 4 seconds before next ping
             time.sleep(4)
@@ -433,13 +567,16 @@ class NovrintechDesktopApp:
             
             if response.status_code == 200:
                 self.status_label.config(text="Status: Connected ✓", foreground="green")
+                self.connection_status.config(text="🟢 Connected", foreground="green")
                 messagebox.showinfo("Success", "Connection successful!")
             else:
                 self.status_label.config(text="Status: Connection failed", foreground="red")
+                self.connection_status.config(text="🔴 Failed", foreground="red")
                 messagebox.showerror("Error", f"Connection failed: {response.status_code}")
         
         except requests.exceptions.RequestException as e:
             self.status_label.config(text="Status: Connection failed", foreground="red")
+            self.connection_status.config(text="🔴 Error", foreground="red")
             messagebox.showerror("Error", f"Connection error: {str(e)}")
     
     def browse_file(self):
@@ -1055,6 +1192,319 @@ Status: ✅ File exists on server"""
             self.context_menu.post(event.x_root, event.y_root)
         except Exception as e:
             print(f"Context menu error: {e}")
+    
+    # Menu Action Methods
+    def menu_upload_file(self):
+        """Menu action to browse and upload file"""
+        self.notebook.select(1)  # Switch to upload tab
+        self.browse_file()
+        if hasattr(self, 'selected_file'):
+            self.upload_file()
+    
+    def show_preferences(self):
+        """Show preferences dialog"""
+        pref_window = tk.Toplevel(self.root)
+        pref_window.title("Preferences")
+        pref_window.geometry("400x300")
+        pref_window.configure(bg=self.bg_color)
+        pref_window.transient(self.root)
+        pref_window.grab_set()
+        
+        # Center the window
+        pref_window.update_idletasks()
+        x = (pref_window.winfo_screenwidth() // 2) - (400 // 2)
+        y = (pref_window.winfo_screenheight() // 2) - (300 // 2)
+        pref_window.geometry(f"400x300+{x}+{y}")
+        
+        ttk.Label(pref_window, text="⚙️ Preferences", style='Heading.TLabel').pack(pady=20)
+        ttk.Label(pref_window, text="Preferences will be available in future updates.", font=('Arial', 10)).pack(pady=20)
+        ttk.Button(pref_window, text="Close", command=pref_window.destroy).pack(pady=20)
+    
+    def zoom_in(self):
+        """Increase UI scale"""
+        current_font = self.root.option_get("font", "TkDefaultFont")
+        # Simple zoom implementation - could be enhanced
+        messagebox.showinfo("Zoom", "Zoom In - Feature coming soon!")
+    
+    def zoom_out(self):
+        """Decrease UI scale"""
+        messagebox.showinfo("Zoom", "Zoom Out - Feature coming soon!")
+    
+    def reset_zoom(self):
+        """Reset UI scale to default"""
+        messagebox.showinfo("Zoom", "Reset Zoom - Feature coming soon!")
+    
+    def clear_upload_history(self):
+        """Clear upload history"""
+        result = messagebox.askyesno("Clear History", "Are you sure you want to clear all upload history?")
+        if result:
+            self.uploaded_files = {}
+            self.save_file_history()
+            self.update_history_display()
+            messagebox.showinfo("Success", "Upload history cleared!")
+    
+    def show_statistics(self):
+        """Show application statistics"""
+        stats_window = tk.Toplevel(self.root)
+        stats_window.title("Statistics")
+        stats_window.geometry("500x400")
+        stats_window.configure(bg=self.bg_color)
+        stats_window.transient(self.root)
+        stats_window.grab_set()
+        
+        # Center the window
+        stats_window.update_idletasks()
+        x = (stats_window.winfo_screenwidth() // 2) - (500 // 2)
+        y = (stats_window.winfo_screenheight() // 2) - (400 // 2)
+        stats_window.geometry(f"500x400+{x}+{y}")
+        
+        # Statistics content
+        stats_frame = ttk.Frame(stats_window, padding="20")
+        stats_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(stats_frame, text="📊 Application Statistics", style='Heading.TLabel').pack(pady=(0, 20))
+        
+        # Calculate statistics
+        total_files = len(self.uploaded_files)
+        total_uploads = sum(data.get('count', 0) for data in self.uploaded_files.values())
+        unique_users = len(set(data.get('uploaded_by', 'Unknown') for data in self.uploaded_files.values()))
+        
+        stats_text = f"""Total Files in History: {total_files}
+Total Upload Count: {total_uploads}
+Unique Users: {unique_users}
+API Base URL: {self.api_base_url}
+Keep-alive Status: {'Active' if self.keep_alive_running else 'Inactive'}
+
+Recent Files:"""
+        
+        ttk.Label(stats_frame, text=stats_text, font=('Arial', 10), justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 20))
+        
+        # Recent files list
+        recent_frame = ttk.Frame(stats_frame)
+        recent_frame.pack(fill=tk.BOTH, expand=True)
+        
+        recent_listbox = tk.Listbox(recent_frame, height=8)
+        recent_scrollbar = ttk.Scrollbar(recent_frame, orient=tk.VERTICAL, command=recent_listbox.yview)
+        recent_listbox.configure(yscrollcommand=recent_scrollbar.set)
+        
+        # Add recent files
+        sorted_files = sorted(self.uploaded_files.items(), 
+                            key=lambda x: x[1].get('last_upload', ''), reverse=True)
+        
+        for filename, data in sorted_files[:10]:  # Show last 10 files
+            uploader = data.get('uploaded_by', 'Unknown')
+            recent_listbox.insert(tk.END, f"{filename} (by {uploader})")
+        
+        recent_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        recent_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        ttk.Button(stats_frame, text="Close", command=stats_window.destroy).pack(pady=(20, 0))
+    
+    def export_file_list(self):
+        """Export file list to CSV"""
+        if not self.uploaded_files:
+            messagebox.showwarning("No Data", "No files to export. Upload some files first!")
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            title="Export File List",
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                import csv
+                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['Filename', 'Uploaded By', 'Upload Count', 'First Upload', 'Last Upload', 'File ID'])
+                    
+                    for file, data in self.uploaded_files.items():
+                        writer.writerow([
+                            file,
+                            data.get('uploaded_by', 'Unknown'),
+                            data.get('count', 0),
+                            data.get('first_upload', ''),
+                            data.get('last_upload', ''),
+                            data.get('file_id', '')
+                        ])
+                
+                messagebox.showinfo("Success", f"File list exported to:\n{filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Export failed: {str(e)}")
+    
+    def show_shortcuts(self):
+        """Show keyboard shortcuts"""
+        shortcuts_window = tk.Toplevel(self.root)
+        shortcuts_window.title("Keyboard Shortcuts")
+        shortcuts_window.geometry("600x500")
+        shortcuts_window.configure(bg=self.bg_color)
+        shortcuts_window.transient(self.root)
+        shortcuts_window.grab_set()
+        
+        # Center the window
+        shortcuts_window.update_idletasks()
+        x = (shortcuts_window.winfo_screenwidth() // 2) - (600 // 2)
+        y = (shortcuts_window.winfo_screenheight() // 2) - (500 // 2)
+        shortcuts_window.geometry(f"600x500+{x}+{y}")
+        
+        shortcuts_frame = ttk.Frame(shortcuts_window, padding="20")
+        shortcuts_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(shortcuts_frame, text="⌨️ Keyboard Shortcuts", style='Heading.TLabel').pack(pady=(0, 20))
+        
+        shortcuts_text = """Global Shortcuts:
+Ctrl+O          Browse & Upload File
+Ctrl+Q          Exit Application
+F5              Refresh File List
+Ctrl+D          Download Selected File
+Ctrl+A          Select All Files
+Delete          Delete Selected File
+Ctrl++          Zoom In
+Ctrl+-          Zoom Out
+Ctrl+0          Reset Zoom
+
+File Manager Shortcuts:
+Enter           View File Info
+Double-click    View File Info
+Right-click     Context Menu
+F5              Refresh Files
+Delete          Delete Selected
+Ctrl+A          Select All
+Ctrl+D          Download Selected
+
+Navigation:
+Tab             Switch between controls
+Shift+Tab       Switch backwards
+Space           Activate button/checkbox
+Arrow Keys      Navigate lists/trees"""
+        
+        text_widget = tk.Text(shortcuts_frame, wrap=tk.WORD, font=('Courier', 10), height=20)
+        text_widget.insert(tk.END, shortcuts_text)
+        text_widget.config(state=tk.DISABLED)
+        
+        text_scrollbar = ttk.Scrollbar(shortcuts_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=text_scrollbar.set)
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        ttk.Button(shortcuts_frame, text="Close", command=shortcuts_window.destroy).pack(pady=(20, 0))
+    
+    def show_user_guide(self):
+        """Show user guide"""
+        guide_window = tk.Toplevel(self.root)
+        guide_window.title("User Guide")
+        guide_window.geometry("700x600")
+        guide_window.configure(bg=self.bg_color)
+        guide_window.transient(self.root)
+        guide_window.grab_set()
+        
+        # Center the window
+        guide_window.update_idletasks()
+        x = (guide_window.winfo_screenwidth() // 2) - (700 // 2)
+        y = (guide_window.winfo_screenheight() // 2) - (600 // 2)
+        guide_window.geometry(f"700x600+{x}+{y}")
+        
+        guide_frame = ttk.Frame(guide_window, padding="20")
+        guide_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(guide_frame, text="📖 User Guide", style='Heading.TLabel').pack(pady=(0, 20))
+        
+        guide_text = """Welcome to Novrintech Data Fall Back Desktop Client!
+
+GETTING STARTED:
+1. The application is pre-configured and ready to use
+2. Enter your name in the File Upload tab
+3. Select a file and click Upload
+4. View and manage your files in the File Manager tab
+
+FEATURES:
+
+📁 File Upload:
+• Enter your name (required for all uploads)
+• Browse and select files to upload
+• Automatic duplicate detection
+• Upload history tracking
+
+📂 File Manager:
+• View all uploaded files
+• Download files to your computer
+• Delete files from server
+• View detailed file information
+• Bulk operations (select multiple files)
+• Search and filter capabilities
+
+💾 Data Operations:
+• Store JSON data with custom keys
+• Retrieve stored data
+• Perfect for configuration storage
+
+⚙️ Configuration:
+• Test API connection
+• View system status
+• Monitor keep-alive service
+
+TIPS:
+• Use keyboard shortcuts for faster navigation
+• Right-click in File Manager for context menu
+• The app automatically prevents server sleep
+• All operations are logged for your reference
+
+TROUBLESHOOTING:
+• If upload fails, check your internet connection
+• Use "Test Connection" to verify API status
+• Check the status indicators in the title bar
+• Refresh file list if files don't appear
+
+For technical support, contact the development team."""
+        
+        text_widget = scrolledtext.ScrolledText(guide_frame, wrap=tk.WORD, font=('Arial', 10), height=25)
+        text_widget.insert(tk.END, guide_text)
+        text_widget.config(state=tk.DISABLED)
+        text_widget.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        
+        ttk.Button(guide_frame, text="Close", command=guide_window.destroy).pack()
+    
+    def show_about(self):
+        """Show about dialog"""
+        about_window = tk.Toplevel(self.root)
+        about_window.title("About")
+        about_window.geometry("450x350")
+        about_window.configure(bg=self.bg_color)
+        about_window.transient(self.root)
+        about_window.grab_set()
+        about_window.resizable(False, False)
+        
+        # Center the window
+        about_window.update_idletasks()
+        x = (about_window.winfo_screenwidth() // 2) - (450 // 2)
+        y = (about_window.winfo_screenheight() // 2) - (350 // 2)
+        about_window.geometry(f"450x350+{x}+{y}")
+        
+        about_frame = ttk.Frame(about_window, padding="30")
+        about_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # App icon/title
+        ttk.Label(about_frame, text="🔥", font=('Arial', 48)).pack(pady=(0, 10))
+        ttk.Label(about_frame, text="Novrintech Data Fall Back", style='Title.TLabel').pack(pady=(0, 5))
+        ttk.Label(about_frame, text="Desktop Client v2.0", font=('Arial', 12)).pack(pady=(0, 20))
+        
+        about_text = """A powerful desktop client for file management and data operations.
+
+Features:
+• Secure file upload and download
+• User-based file tracking
+• Bulk file operations
+• Real-time server monitoring
+• Responsive design for all screen sizes
+
+Built with Python & Tkinter
+© 2024 Novrintech Solutions"""
+        
+        ttk.Label(about_frame, text=about_text, font=('Arial', 10), justify=tk.CENTER).pack(pady=(0, 30))
+        
+        ttk.Button(about_frame, text="Close", command=about_window.destroy, style='Primary.TButton').pack()
     
     def format_file_size(self, size_bytes):
         """Format file size in human readable format"""
