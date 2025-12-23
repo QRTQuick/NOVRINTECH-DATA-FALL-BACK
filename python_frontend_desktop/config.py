@@ -16,7 +16,7 @@ MAX_FILE_SIZE_MB = 100  # Maximum file size in MB
 ALLOWED_FILE_TYPES = [
     ".txt", ".pdf", ".doc", ".docx", ".xls", ".xlsx", 
     ".jpg", ".jpeg", ".png", ".gif", ".mp4", ".avi",
-    ".zip", ".rar", ".json", ".xml", ".csv"
+    ".zip", ".rar", ".json", ".xml", ".csv",".html"
 ]
 
 # UI Settings

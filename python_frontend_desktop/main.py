@@ -17,7 +17,17 @@ class NovrintechDesktopApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Novrintech Data Fall Back - Desktop Client")
-        self.root.geometry("800x600")
+        self.root.geometry("900x700")
+        
+        # Set modern theme colors
+        self.bg_color = "#f0f0f0"
+        self.primary_color = "#2196F3"
+        self.success_color = "#4CAF50"
+        self.danger_color = "#f44336"
+        self.text_color = "#333333"
+        
+        # Configure root window
+        self.root.configure(bg=self.bg_color)
         
         # Handle window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -38,91 +48,155 @@ class NovrintechDesktopApp:
         self.start_keep_alive()
     
     def setup_ui(self):
+        # Create custom style
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Configure custom styles
+        style.configure('Title.TLabel', font=('Arial', 16, 'bold'), background=self.bg_color, foreground=self.primary_color)
+        style.configure('Heading.TLabel', font=('Arial', 12, 'bold'), background=self.bg_color, foreground=self.text_color)
+        style.configure('Success.TLabel', font=('Arial', 10), background=self.bg_color, foreground=self.success_color)
+        style.configure('Error.TLabel', font=('Arial', 10), background=self.bg_color, foreground=self.danger_color)
+        style.configure('Primary.TButton', font=('Arial', 10, 'bold'))
+        
+        # Main container with padding
+        main_container = ttk.Frame(self.root, padding="20")
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title_label = ttk.Label(main_container, text="🔥 Novrintech Data Fall Back", style='Title.TLabel')
+        title_label.pack(pady=(0, 20))
+        
         # Main notebook for tabs
-        notebook = ttk.Notebook(self.root)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        notebook = ttk.Notebook(main_container)
+        notebook.pack(fill=tk.BOTH, expand=True)
         
         # Configuration Tab
-        config_frame = ttk.Frame(notebook)
-        notebook.add(config_frame, text="Configuration")
+        config_frame = ttk.Frame(notebook, padding="20")
+        notebook.add(config_frame, text="⚙️ Configuration")
         self.setup_config_tab(config_frame)
         
         # File Upload Tab
-        upload_frame = ttk.Frame(notebook)
-        notebook.add(upload_frame, text="File Upload")
+        upload_frame = ttk.Frame(notebook, padding="20")
+        notebook.add(upload_frame, text="📁 File Upload")
         self.setup_upload_tab(upload_frame)
         
         # File Manager Tab
-        manager_frame = ttk.Frame(notebook)
-        notebook.add(manager_frame, text="File Manager")
+        manager_frame = ttk.Frame(notebook, padding="20")
+        notebook.add(manager_frame, text="📂 File Manager")
         self.setup_manager_tab(manager_frame)
         
         # Data Operations Tab
-        data_frame = ttk.Frame(notebook)
-        notebook.add(data_frame, text="Data Operations")
+        data_frame = ttk.Frame(notebook, padding="20")
+        notebook.add(data_frame, text="💾 Data Operations")
         self.setup_data_tab(data_frame)
     
     def setup_config_tab(self, parent):
-        ttk.Label(parent, text="API Configuration", font=("Arial", 14, "bold")).pack(pady=10)
+        # Header
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(header_frame, text="API Configuration", style='Heading.TLabel').pack(anchor=tk.W)
+        ttk.Label(header_frame, text="Pre-configured for instant testing", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
+        
+        # Configuration section
+        config_section = ttk.LabelFrame(parent, text="Connection Settings", padding="15")
+        config_section.pack(fill=tk.X, pady=(0, 20))
         
         # API URL
-        ttk.Label(parent, text="API Base URL:").pack(anchor=tk.W, padx=20)
-        self.url_entry = ttk.Entry(parent, width=60)
-        self.url_entry.insert(0, "https://novrintech-data-fall-back.onrender.com")  # Embedded URL
-        self.url_entry.pack(padx=20, pady=5)
+        ttk.Label(config_section, text="API Base URL:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        self.url_entry = ttk.Entry(config_section, width=70, font=('Arial', 10))
+        self.url_entry.insert(0, "https://novrintech-data-fall-back.onrender.com")
+        self.url_entry.pack(fill=tk.X, pady=(0, 15))
         
         # API Key
-        ttk.Label(parent, text="API Key:").pack(anchor=tk.W, padx=20)
-        self.key_entry = ttk.Entry(parent, width=60, show="*")
-        self.key_entry.insert(0, "novrintech_api_key_2024_secure")  # Embedded key
-        self.key_entry.pack(padx=20, pady=5)
+        ttk.Label(config_section, text="API Key:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        self.key_entry = ttk.Entry(config_section, width=70, show="*", font=('Arial', 10))
+        self.key_entry.insert(0, "novrintech_api_key_2024_secure")
+        self.key_entry.pack(fill=tk.X, pady=(0, 15))
         
-        # Test Connection
-        ttk.Button(parent, text="Test Connection", command=self.test_connection).pack(pady=10)
+        # Test Connection Button
+        button_frame = ttk.Frame(config_section)
+        button_frame.pack(fill=tk.X)
         
-        # Status
-        self.status_label = ttk.Label(parent, text="Status: Not connected", foreground="red")
-        self.status_label.pack(pady=5)
+        test_btn = ttk.Button(button_frame, text="🔗 Test Connection", command=self.test_connection, style='Primary.TButton')
+        test_btn.pack(side=tk.LEFT)
+        
+        # Status section
+        status_section = ttk.LabelFrame(parent, text="Status", padding="15")
+        status_section.pack(fill=tk.X, pady=(0, 20))
+        
+        # Connection Status
+        self.status_label = ttk.Label(status_section, text="Status: Ready to connect", style='Success.TLabel')
+        self.status_label.pack(anchor=tk.W, pady=(0, 5))
         
         # Keep-alive status
-        self.keepalive_label = ttk.Label(parent, text="Keep-alive: Active (prevents backend sleep)", foreground="green")
-        self.keepalive_label.pack(pady=5)
+        self.keepalive_label = ttk.Label(status_section, text="Keep-alive: Active (prevents backend sleep)", style='Success.TLabel')
+        self.keepalive_label.pack(anchor=tk.W)
+        
+        # Info section
+        info_section = ttk.LabelFrame(parent, text="Information", padding="15")
+        info_section.pack(fill=tk.X)
+        
+        info_text = """✅ No configuration needed - ready to use!
+🔄 Keep-alive system prevents backend sleep
+📁 Upload files with duplicate detection
+💾 Store and retrieve JSON data
+🔒 Secure API key authentication"""
+        
+        ttk.Label(info_section, text=info_text, font=('Arial', 9), justify=tk.LEFT).pack(anchor=tk.W)
     
     def setup_upload_tab(self, parent):
-        ttk.Label(parent, text="File Upload", font=("Arial", 14, "bold")).pack(pady=10)
+        # Header
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
         
-        # File selection
-        file_frame = ttk.Frame(parent)
-        file_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(header_frame, text="File Upload", style='Heading.TLabel').pack(anchor=tk.W)
+        ttk.Label(header_frame, text="Upload files with automatic duplicate detection", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
         
-        self.selected_file_label = ttk.Label(file_frame, text="No file selected")
-        self.selected_file_label.pack(side=tk.LEFT)
+        # File selection section
+        file_section = ttk.LabelFrame(parent, text="Select File", padding="15")
+        file_section.pack(fill=tk.X, pady=(0, 20))
         
-        ttk.Button(file_frame, text="Browse Files", command=self.browse_file).pack(side=tk.RIGHT)
+        file_frame = ttk.Frame(file_section)
+        file_frame.pack(fill=tk.X)
         
-        # Upload options
-        options_frame = ttk.Frame(parent)
-        options_frame.pack(fill=tk.X, padx=20, pady=10)
+        self.selected_file_label = ttk.Label(file_frame, text="📄 No file selected", font=('Arial', 10))
+        self.selected_file_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        browse_btn = ttk.Button(file_frame, text="📁 Browse Files", command=self.browse_file)
+        browse_btn.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # Upload options section
+        options_section = ttk.LabelFrame(parent, text="Upload Options", padding="15")
+        options_section.pack(fill=tk.X, pady=(0, 20))
         
         self.check_duplicates = tk.BooleanVar(value=True)
-        ttk.Checkbutton(options_frame, text="Check for duplicates", variable=self.check_duplicates).pack(anchor=tk.W)
+        ttk.Checkbutton(options_section, text="🔍 Check for duplicates before upload", variable=self.check_duplicates).pack(anchor=tk.W)
         
         # Upload button
-        ttk.Button(parent, text="Upload File", command=self.upload_file, style="Accent.TButton").pack(pady=20)
+        upload_btn = ttk.Button(options_section, text="🚀 Upload File", command=self.upload_file, style='Primary.TButton')
+        upload_btn.pack(pady=(15, 0))
         
-        # Upload history
-        ttk.Label(parent, text="Upload History:", font=("Arial", 12, "bold")).pack(anchor=tk.W, padx=20)
+        # Upload history section
+        history_section = ttk.LabelFrame(parent, text="Upload History", padding="15")
+        history_section.pack(fill=tk.BOTH, expand=True)
         
-        # History listbox
-        history_frame = ttk.Frame(parent)
-        history_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        # History treeview
+        columns = ("filename", "upload_time", "count")
+        self.history_tree = ttk.Treeview(history_section, columns=columns, show="headings", height=8)
         
-        self.history_tree = ttk.Treeview(history_frame, columns=("filename", "upload_time", "count"), show="headings")
-        self.history_tree.heading("filename", text="File Name")
-        self.history_tree.heading("upload_time", text="Last Upload")
-        self.history_tree.heading("count", text="Upload Count")
+        # Configure columns
+        self.history_tree.heading("filename", text="📄 File Name")
+        self.history_tree.heading("upload_time", text="🕒 Last Upload")
+        self.history_tree.heading("count", text="📊 Count")
         
-        scrollbar = ttk.Scrollbar(history_frame, orient=tk.VERTICAL, command=self.history_tree.yview)
+        self.history_tree.column("filename", width=300)
+        self.history_tree.column("upload_time", width=200)
+        self.history_tree.column("count", width=100)
+        
+        # Scrollbar for history
+        scrollbar = ttk.Scrollbar(history_section, orient=tk.VERTICAL, command=self.history_tree.yview)
         self.history_tree.configure(yscrollcommand=scrollbar.set)
         
         self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -325,7 +399,7 @@ class NovrintechDesktopApp:
             
             with open(self.selected_file, 'rb') as f:
                 files = {'file': (filename, f, 'application/octet-stream')}
-                response = requests.post(f"{self.api_base_url}/file/upload", headers=headers, files=files)
+                response = requests.post(f"{self.api_base_url}/file/upload", headers=headers, files=files, timeout=30)
             
             if response.status_code == 200:
                 result = response.json()
@@ -356,9 +430,22 @@ class NovrintechDesktopApp:
                 if hasattr(self, 'selected_file'):
                     delattr(self, 'selected_file')
             
+            elif response.status_code == 500:
+                # Handle server error with more detail
+                error_msg = "Server error occurred. This might be due to:\n"
+                error_msg += "• Database connection issues\n"
+                error_msg += "• Missing app configuration\n"
+                error_msg += "• Backend service problems\n\n"
+                error_msg += f"Technical details: {response.text}"
+                messagebox.showerror("Server Error", error_msg)
+            
             else:
-                messagebox.showerror("Error", f"Upload failed: {response.text}")
+                messagebox.showerror("Error", f"Upload failed: {response.status_code}\n{response.text}")
         
+        except requests.exceptions.Timeout:
+            messagebox.showerror("Error", "Upload timed out. The file might be too large or the server is slow.")
+        except requests.exceptions.ConnectionError:
+            messagebox.showerror("Error", "Connection failed. Check your internet connection and API URL.")
         except requests.exceptions.RequestException as e:
             messagebox.showerror("Error", f"Upload error: {str(e)}")
     

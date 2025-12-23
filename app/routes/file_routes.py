@@ -17,7 +17,12 @@ async def upload_file(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Upload file and save metadata"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     # Generate unique filename
     file_extension = os.path.splitext(file.filename)[1]
@@ -53,7 +58,12 @@ async def read_file(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Get file metadata"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     postgres_service = AsyncPostgresService(db)
     file_record = await postgres_service.get_file_metadata(app_id, file_id)

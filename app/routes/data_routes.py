@@ -22,7 +22,12 @@ async def save_data(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Save data to PostgreSQL and sync to Firebase"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
@@ -47,7 +52,12 @@ async def read_data(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Read data from PostgreSQL with Firebase fallback"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
@@ -87,7 +97,12 @@ async def update_data(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Update data in PostgreSQL and sync to Firebase"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
@@ -118,7 +133,12 @@ async def delete_data(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Delete data from PostgreSQL and Firebase"""
-    app_id = request.state.app_id
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
     
     postgres_service = AsyncPostgresService(db)
     sync_service = SyncService(db)
