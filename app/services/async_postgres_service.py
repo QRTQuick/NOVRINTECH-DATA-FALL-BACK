@@ -70,3 +70,21 @@ class AsyncPostgresService:
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+    
+    async def list_files(self, app_id: str, limit: int = 100, offset: int = 0) -> list[FileStore]:
+        """List files for an app from PostgreSQL (async)"""
+        stmt = select(FileStore).where(
+            FileStore.app_id == uuid.UUID(app_id)
+        ).order_by(FileStore.created_at.desc()).limit(limit).offset(offset)
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def delete_file_metadata(self, app_id: str, file_id: str) -> bool:
+        """Delete file metadata from PostgreSQL (async)"""
+        stmt = delete(FileStore).where(
+            FileStore.app_id == uuid.UUID(app_id),
+            FileStore.id == uuid.UUID(file_id)
+        )
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount > 0

@@ -205,33 +205,62 @@ class NovrintechDesktopApp:
         self.update_history_display()
     
     def setup_manager_tab(self, parent):
-        ttk.Label(parent, text="File Manager", font=("Arial", 14, "bold")).pack(pady=10)
+        # Header
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
         
-        # Refresh button
-        ttk.Button(parent, text="Refresh Files", command=self.refresh_files).pack(pady=10)
+        ttk.Label(header_frame, text="File Manager", style='Heading.TLabel').pack(anchor=tk.W)
+        ttk.Label(header_frame, text="Manage your uploaded files", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
         
-        # Files list (placeholder - would need backend endpoint to list files)
-        files_frame = ttk.Frame(parent)
-        files_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        # Controls section
+        controls_frame = ttk.LabelFrame(parent, text="Controls", padding="15")
+        controls_frame.pack(fill=tk.X, pady=(0, 20))
         
-        self.files_tree = ttk.Treeview(files_frame, columns=("file_id", "filename", "type", "upload_date"), show="headings")
-        self.files_tree.heading("file_id", text="File ID")
-        self.files_tree.heading("filename", text="File Name")
-        self.files_tree.heading("type", text="Type")
-        self.files_tree.heading("upload_date", text="Upload Date")
+        controls_row = ttk.Frame(controls_frame)
+        controls_row.pack(fill=tk.X)
         
-        files_scrollbar = ttk.Scrollbar(files_frame, orient=tk.VERTICAL, command=self.files_tree.yview)
+        ttk.Button(controls_row, text="🔄 Refresh Files", command=self.refresh_files, style='Primary.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(controls_row, text="📥 Download Selected", command=self.download_file).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(controls_row, text="🗑️ Delete Selected", command=self.delete_file).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(controls_row, text="ℹ️ View Info", command=self.view_file_info).pack(side=tk.LEFT)
+        
+        # Files list section
+        files_section = ttk.LabelFrame(parent, text="Files", padding="15")
+        files_section.pack(fill=tk.BOTH, expand=True)
+        
+        # Files treeview
+        columns = ("file_id", "filename", "type", "size", "upload_date")
+        self.files_tree = ttk.Treeview(files_section, columns=columns, show="headings", height=12)
+        
+        # Configure columns
+        self.files_tree.heading("file_id", text="📄 File ID")
+        self.files_tree.heading("filename", text="📁 File Name")
+        self.files_tree.heading("type", text="🏷️ Type")
+        self.files_tree.heading("size", text="📊 Size")
+        self.files_tree.heading("upload_date", text="🕒 Upload Date")
+        
+        self.files_tree.column("file_id", width=250)
+        self.files_tree.column("filename", width=200)
+        self.files_tree.column("type", width=100)
+        self.files_tree.column("size", width=80)
+        self.files_tree.column("upload_date", width=150)
+        
+        # Scrollbar for files
+        files_scrollbar = ttk.Scrollbar(files_section, orient=tk.VERTICAL, command=self.files_tree.yview)
         self.files_tree.configure(yscrollcommand=files_scrollbar.set)
         
         self.files_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         files_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # File operations
-        ops_frame = ttk.Frame(parent)
-        ops_frame.pack(fill=tk.X, padx=20, pady=10)
+        # Status section
+        status_section = ttk.LabelFrame(parent, text="Status", padding="15")
+        status_section.pack(fill=tk.X, pady=(20, 0))
         
-        ttk.Button(ops_frame, text="Download Selected", command=self.download_file).pack(side=tk.LEFT, padx=5)
-        ttk.Button(ops_frame, text="View Info", command=self.view_file_info).pack(side=tk.LEFT, padx=5)
+        self.files_status_label = ttk.Label(status_section, text="Click 'Refresh Files' to load your files", style='Success.TLabel')
+        self.files_status_label.pack(anchor=tk.W)
+        
+        # Auto-refresh on tab load
+        self.refresh_files()
     
     def setup_data_tab(self, parent):
         ttk.Label(parent, text="Data Operations", font=("Arial", 14, "bold")).pack(pady=10)
@@ -450,16 +479,220 @@ class NovrintechDesktopApp:
             messagebox.showerror("Error", f"Upload error: {str(e)}")
     
     def refresh_files(self):
-        """Refresh files list (placeholder)"""
-        messagebox.showinfo("Info", "File listing feature requires backend endpoint implementation")
+        """Refresh files list from backend"""
+        if not self.api_key:
+            self.files_status_label.config(text="❌ Please configure API key first", foreground="red")
+            return
+        
+        try:
+            self.files_status_label.config(text="🔄 Loading files...", foreground="blue")
+            
+            headers = {"X-API-KEY": self.api_key}
+            response = requests.get(f"{self.api_base_url}/file/list", headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                result = response.json()
+                files = result.get("files", [])
+                
+                # Clear existing items
+                for item in self.files_tree.get_children():
+                    self.files_tree.delete(item)
+                
+                # Add files to tree
+                for file_info in files:
+                    file_size = self.format_file_size(file_info.get("file_size", 0))
+                    upload_date = self.format_date(file_info.get("created_at", ""))
+                    
+                    self.files_tree.insert("", tk.END, values=(
+                        file_info.get("file_id", ""),
+                        file_info.get("file_name", ""),
+                        file_info.get("file_type", "Unknown"),
+                        file_size,
+                        upload_date
+                    ))
+                
+                self.files_status_label.config(text=f"✅ Loaded {len(files)} files", foreground="green")
+                
+            else:
+                self.files_status_label.config(text=f"❌ Failed to load files: {response.status_code}", foreground="red")
+                messagebox.showerror("Error", f"Failed to load files: {response.text}")
+        
+        except requests.exceptions.RequestException as e:
+            self.files_status_label.config(text="❌ Connection error", foreground="red")
+            messagebox.showerror("Error", f"Connection error: {str(e)}")
     
     def download_file(self):
-        """Download selected file (placeholder)"""
-        messagebox.showinfo("Info", "File download feature requires backend endpoint implementation")
+        """Download selected file"""
+        selected_item = self.files_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select a file to download")
+            return
+        
+        if not self.api_key:
+            messagebox.showerror("Error", "Please configure API key first")
+            return
+        
+        # Get file info
+        item = self.files_tree.item(selected_item[0])
+        file_id = item['values'][0]
+        file_name = item['values'][1]
+        
+        # Ask user where to save
+        from tkinter import filedialog
+        save_path = filedialog.asksaveasfilename(
+            title="Save file as...",
+            initialvalue=file_name,
+            defaultextension="",
+            filetypes=[("All files", "*.*")]
+        )
+        
+        if not save_path:
+            return
+        
+        try:
+            self.files_status_label.config(text=f"📥 Downloading {file_name}...", foreground="blue")
+            
+            headers = {"X-API-KEY": self.api_key}
+            response = requests.get(f"{self.api_base_url}/file/download/{file_id}", headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
+                
+                self.files_status_label.config(text=f"✅ Downloaded {file_name}", foreground="green")
+                messagebox.showinfo("Success", f"File downloaded successfully to:\n{save_path}")
+                
+            else:
+                self.files_status_label.config(text="❌ Download failed", foreground="red")
+                messagebox.showerror("Error", f"Download failed: {response.text}")
+        
+        except Exception as e:
+            self.files_status_label.config(text="❌ Download error", foreground="red")
+            messagebox.showerror("Error", f"Download error: {str(e)}")
+    
+    def delete_file(self):
+        """Delete selected file"""
+        selected_item = self.files_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select a file to delete")
+            return
+        
+        if not self.api_key:
+            messagebox.showerror("Error", "Please configure API key first")
+            return
+        
+        # Get file info
+        item = self.files_tree.item(selected_item[0])
+        file_id = item['values'][0]
+        file_name = item['values'][1]
+        
+        # Confirm deletion
+        result = messagebox.askyesno(
+            "Confirm Delete", 
+            f"Are you sure you want to delete '{file_name}'?\n\nThis action cannot be undone."
+        )
+        
+        if not result:
+            return
+        
+        try:
+            self.files_status_label.config(text=f"🗑️ Deleting {file_name}...", foreground="blue")
+            
+            headers = {"X-API-KEY": self.api_key}
+            response = requests.delete(f"{self.api_base_url}/file/delete/{file_id}", headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                self.files_status_label.config(text=f"✅ Deleted {file_name}", foreground="green")
+                messagebox.showinfo("Success", f"File '{file_name}' deleted successfully")
+                
+                # Refresh the list
+                self.refresh_files()
+                
+            else:
+                self.files_status_label.config(text="❌ Delete failed", foreground="red")
+                messagebox.showerror("Error", f"Delete failed: {response.text}")
+        
+        except Exception as e:
+            self.files_status_label.config(text="❌ Delete error", foreground="red")
+            messagebox.showerror("Error", f"Delete error: {str(e)}")
     
     def view_file_info(self):
-        """View file information (placeholder)"""
-        messagebox.showinfo("Info", "File info feature requires backend endpoint implementation")
+        """View file information"""
+        selected_item = self.files_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select a file to view info")
+            return
+        
+        if not self.api_key:
+            messagebox.showerror("Error", "Please configure API key first")
+            return
+        
+        # Get file info
+        item = self.files_tree.item(selected_item[0])
+        file_id = item['values'][0]
+        file_name = item['values'][1]
+        
+        try:
+            headers = {"X-API-KEY": self.api_key}
+            response = requests.get(f"{self.api_base_url}/file/read/{file_id}", headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Create info window
+                info_window = tk.Toplevel(self.root)
+                info_window.title(f"File Info - {file_name}")
+                info_window.geometry("500x400")
+                info_window.configure(bg=self.bg_color)
+                
+                # Info content
+                info_frame = ttk.Frame(info_window, padding="20")
+                info_frame.pack(fill=tk.BOTH, expand=True)
+                
+                ttk.Label(info_frame, text="📄 File Information", style='Heading.TLabel').pack(anchor=tk.W, pady=(0, 15))
+                
+                info_text = f"""File ID: {result.get('file_id', 'N/A')}
+File Name: {result.get('file_name', 'N/A')}
+File Type: {result.get('file_type', 'N/A')}
+Upload Date: {self.format_date(result.get('created_at', ''))}
+File Path: {result.get('file_path', 'N/A')}"""
+                
+                info_label = ttk.Label(info_frame, text=info_text, font=('Arial', 10), justify=tk.LEFT)
+                info_label.pack(anchor=tk.W, pady=(0, 20))
+                
+                # Close button
+                ttk.Button(info_frame, text="Close", command=info_window.destroy).pack()
+                
+            else:
+                messagebox.showerror("Error", f"Failed to get file info: {response.text}")
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Info error: {str(e)}")
+    
+    def format_file_size(self, size_bytes):
+        """Format file size in human readable format"""
+        if size_bytes == 0:
+            return "0 B"
+        
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        while size_bytes >= 1024 and i < len(size_names) - 1:
+            size_bytes /= 1024.0
+            i += 1
+        
+        return f"{size_bytes:.1f} {size_names[i]}"
+    
+    def format_date(self, date_string):
+        """Format ISO date string to readable format"""
+        if not date_string:
+            return "Unknown"
+        
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except:
+            return date_string
     
     def save_data(self):
         """Save data to backend"""

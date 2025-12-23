@@ -114,3 +114,115 @@ async def read_file(
         "file_type": file_record.file_type,
         "created_at": file_record.created_at.isoformat()
     }
+
+@router.get("/list")
+async def list_files(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+    limit: int = 100,
+    offset: int = 0
+):
+    """List all files for the app"""
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
+    
+    postgres_service = AsyncPostgresService(db)
+    files = await postgres_service.list_files(app_id, limit, offset)
+    
+    return {
+        "success": True,
+        "files": [
+            {
+                "file_id": str(file.id),
+                "file_name": file.file_name,
+                "file_type": file.file_type,
+                "file_size": os.path.getsize(file.file_path) if os.path.exists(file.file_path) else 0,
+                "created_at": file.created_at.isoformat()
+            }
+            for file in files
+        ],
+        "total": len(files)
+    }
+
+@router.get("/download/{file_id}")
+async def download_file(
+    request: Request,
+    file_id: str,
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Download file by ID"""
+    from fastapi.responses import FileResponse
+    
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
+    
+    postgres_service = AsyncPostgresService(db)
+    file_record = await postgres_service.get_file_metadata(app_id, file_id)
+    
+    if not file_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID '{file_id}' not found"
+        )
+    
+    if not os.path.exists(file_record.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found on disk"
+        )
+    
+    return FileResponse(
+        path=file_record.file_path,
+        filename=file_record.file_name,
+        media_type=file_record.file_type or 'application/octet-stream'
+    )
+
+@router.delete("/delete/{file_id}")
+async def delete_file(
+    request: Request,
+    file_id: str,
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Delete file by ID"""
+    # Handle app_id - use default if middleware is disabled
+    try:
+        app_id = request.state.app_id
+    except AttributeError:
+        # Default app_id for testing when middleware is disabled
+        app_id = "00000000-0000-0000-0000-000000000000"
+    
+    postgres_service = AsyncPostgresService(db)
+    file_record = await postgres_service.get_file_metadata(app_id, file_id)
+    
+    if not file_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID '{file_id}' not found"
+        )
+    
+    # Delete file from disk
+    if os.path.exists(file_record.file_path):
+        os.remove(file_record.file_path)
+    
+    # Delete from database
+    success = await postgres_service.delete_file_metadata(app_id, file_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete file from database"
+        )
+    
+    return {
+        "success": True,
+        "message": f"File '{file_record.file_name}' deleted successfully",
+        "file_id": file_id
+    }
