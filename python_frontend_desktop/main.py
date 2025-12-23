@@ -154,6 +154,21 @@ class NovrintechDesktopApp:
         ttk.Label(header_frame, text="File Upload", style='Heading.TLabel').pack(anchor=tk.W)
         ttk.Label(header_frame, text="Upload files with automatic duplicate detection", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
         
+        # User Information section
+        user_section = ttk.LabelFrame(parent, text="User Information", padding="15")
+        user_section.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(user_section, text="👤 Your Name:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        self.user_name_entry = ttk.Entry(user_section, width=50, font=('Arial', 10))
+        self.user_name_entry.pack(fill=tk.X, pady=(0, 10))
+        
+        # Load saved user name if available
+        saved_name = self.load_user_name()
+        if saved_name:
+            self.user_name_entry.insert(0, saved_name)
+        
+        ttk.Label(user_section, text="ℹ️ Your name will be associated with uploaded files", font=('Arial', 8), foreground="gray").pack(anchor=tk.W)
+        
         # File selection section
         file_section = ttk.LabelFrame(parent, text="Select File", padding="15")
         file_section.pack(fill=tk.X, pady=(0, 20))
@@ -172,28 +187,30 @@ class NovrintechDesktopApp:
         options_section.pack(fill=tk.X, pady=(0, 20))
         
         self.check_duplicates = tk.BooleanVar(value=True)
-        ttk.Checkbutton(options_section, text="🔍 Check for duplicates before upload", variable=self.check_duplicates).pack(anchor=tk.W)
+        ttk.Checkbutton(options_section, text="🔍 Check for duplicates before upload", variable=self.check_duplicates).pack(anchor=tk.W, pady=(0, 10))
         
         # Upload button
         upload_btn = ttk.Button(options_section, text="🚀 Upload File", command=self.upload_file, style='Primary.TButton')
-        upload_btn.pack(pady=(15, 0))
+        upload_btn.pack(pady=(5, 0))
         
         # Upload history section
         history_section = ttk.LabelFrame(parent, text="Upload History", padding="15")
         history_section.pack(fill=tk.BOTH, expand=True)
         
         # History treeview
-        columns = ("filename", "upload_time", "count")
+        columns = ("filename", "uploader", "upload_time", "count")
         self.history_tree = ttk.Treeview(history_section, columns=columns, show="headings", height=8)
         
         # Configure columns
         self.history_tree.heading("filename", text="📄 File Name")
+        self.history_tree.heading("uploader", text="👤 Uploaded By")
         self.history_tree.heading("upload_time", text="🕒 Last Upload")
         self.history_tree.heading("count", text="📊 Count")
         
-        self.history_tree.column("filename", width=300)
-        self.history_tree.column("upload_time", width=200)
-        self.history_tree.column("count", width=100)
+        self.history_tree.column("filename", width=250)
+        self.history_tree.column("uploader", width=150)
+        self.history_tree.column("upload_time", width=150)
+        self.history_tree.column("count", width=80)
         
         # Scrollbar for history
         scrollbar = ttk.Scrollbar(history_section, orient=tk.VERTICAL, command=self.history_tree.yview)
@@ -342,6 +359,34 @@ class NovrintechDesktopApp:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
     
+    def load_user_name(self):
+        """Load saved user name from local storage"""
+        try:
+            user_file = "user_settings.json"
+            if os.path.exists(user_file):
+                with open(user_file, 'r') as f:
+                    settings = json.load(f)
+                    return settings.get("user_name", "")
+        except:
+            pass
+        return ""
+    
+    def save_user_name(self, name):
+        """Save user name to local storage"""
+        try:
+            user_file = "user_settings.json"
+            settings = {}
+            if os.path.exists(user_file):
+                with open(user_file, 'r') as f:
+                    settings = json.load(f)
+            
+            settings["user_name"] = name
+            
+            with open(user_file, 'w') as f:
+                json.dump(settings, f, indent=2)
+        except Exception as e:
+            print(f"Error saving user name: {e}")
+    
     def load_file_history(self):
         """Load file upload history from local storage"""
         history_file = "upload_history.json"
@@ -365,8 +410,10 @@ class NovrintechDesktopApp:
             self.history_tree.delete(item)
         
         for filename, data in self.uploaded_files.items():
+            uploader = data.get("uploaded_by", "Unknown")
             self.history_tree.insert("", tk.END, values=(
                 filename,
+                uploader,
                 data.get("last_upload", "Unknown"),
                 data.get("count", 0)
             ))
@@ -407,7 +454,22 @@ class NovrintechDesktopApp:
             self.selected_file_label.config(text=f"Selected: {os.path.basename(filename)}")
     
     def upload_file(self):
-        """Upload selected file"""
+        """Upload selected file with user name validation"""
+        # Validate user name first
+        user_name = self.user_name_entry.get().strip()
+        if not user_name:
+            messagebox.showerror("Error", "Please enter your name before uploading")
+            self.user_name_entry.focus()
+            return
+        
+        if len(user_name) < 2:
+            messagebox.showerror("Error", "Please enter a valid name (at least 2 characters)")
+            self.user_name_entry.focus()
+            return
+        
+        # Save user name for future use
+        self.save_user_name(user_name)
+        
         if not hasattr(self, 'selected_file'):
             messagebox.showerror("Error", "Please select a file first")
             return
@@ -435,8 +497,13 @@ class NovrintechDesktopApp:
         try:
             headers = {"X-API-KEY": self.api_key}
             
+            # Add user name to the upload (we can include it in the filename or as metadata)
+            # For now, we'll modify the filename to include the user name
+            name_prefix = f"[{user_name}]_"
+            upload_filename = f"{name_prefix}{filename}"
+            
             with open(self.selected_file, 'rb') as f:
-                files = {'file': (filename, f, 'application/octet-stream')}
+                files = {'file': (upload_filename, f, 'application/octet-stream')}
                 response = requests.post(f"{self.api_base_url}/file/upload", headers=headers, files=files, timeout=30)
             
             if response.status_code == 200:
@@ -449,22 +516,31 @@ class NovrintechDesktopApp:
                 if filename in self.uploaded_files:
                     self.uploaded_files[filename]["count"] += 1
                     self.uploaded_files[filename]["last_upload"] = current_time
+                    self.uploaded_files[filename]["uploaded_by"] = user_name
                 else:
                     self.uploaded_files[filename] = {
                         "count": 1,
                         "first_upload": current_time,
                         "last_upload": current_time,
                         "hash": file_hash,
-                        "file_id": result.get("file_id")
+                        "file_id": result.get("file_id"),
+                        "uploaded_by": user_name,
+                        "upload_filename": upload_filename
                     }
                 
                 self.save_file_history()
                 self.update_history_display()
                 
-                messagebox.showinfo("Success", f"File uploaded successfully!\nFile ID: {result.get('file_id')}")
+                success_msg = f"File uploaded successfully!\n\n"
+                success_msg += f"👤 Uploaded by: {user_name}\n"
+                success_msg += f"📄 Original name: {filename}\n"
+                success_msg += f"📁 Server name: {upload_filename}\n"
+                success_msg += f"🆔 File ID: {result.get('file_id')}"
+                
+                messagebox.showinfo("Upload Success", success_msg)
                 
                 # Clear selection
-                self.selected_file_label.config(text="No file selected")
+                self.selected_file_label.config(text="📄 No file selected")
                 if hasattr(self, 'selected_file'):
                     delattr(self, 'selected_file')
             
@@ -475,6 +551,17 @@ class NovrintechDesktopApp:
                 error_msg += "• Missing app configuration\n"
                 error_msg += "• Backend service problems\n\n"
                 error_msg += f"Technical details: {response.text}"
+                messagebox.showerror("Server Error", error_msg)
+            
+            else:
+                messagebox.showerror("Error", f"Upload failed: {response.status_code}\n{response.text}")
+        
+        except requests.exceptions.Timeout:
+            messagebox.showerror("Error", "Upload timed out. The file might be too large or the server is slow.")
+        except requests.exceptions.ConnectionError:
+            messagebox.showerror("Error", "Connection failed. Check your internet connection and API URL.")
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("Error", f"Upload error: {str(e)}")
                 messagebox.showerror("Server Error", error_msg)
             
             else:
