@@ -1,0 +1,14 @@
+# Desktop Application Requirements
+# Core dependencies
+requests>=2.25.0
+python-dotenv>=0.19.0
+
+# Cross-platform notifications (optional but recommended)
+plyer>=2.1.0
+
+# For building executable (optional)
+# pyinstaller>=4.10
+# auto-py-to-exe>=2.20.0
+
+# Note: tkinter is included with Python standard library
+# Note: All other GUI components use tkinter/ttk which are built-in

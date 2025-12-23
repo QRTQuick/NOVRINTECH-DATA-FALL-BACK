@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2025-12-23 10:49:17",
+    "type": "system",
+    "title": "Application Started",
+    "content": "Novrintech Data Fall Back Desktop Client v2.0 started successfully",
+    "user": "System"
+  },
+  {
+    "timestamp": "2025-12-23 10:49:17",
+    "type": "system",
+    "title": "Application Started",
+    "content": "Novrintech Data Fall Back Desktop Client v2.0 started successfully",
+    "user": "System"
+  },
+  {
+    "timestamp": "2025-12-23 10:49:17",
+    "type": "system",
+    "title": "Test Message",
+    "content": "This is a test message",
+    "user": "TestUser"
+  }
+]

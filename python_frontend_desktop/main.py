@@ -58,11 +58,95 @@ class NovrintechDesktopApp:
         self.keep_alive_running = False
         self.keep_alive_thread = None
         
+        # UI scaling factor
+        self.ui_scale = 1.0
+        self.base_font_size = 10
+        
+        # Chat and notification system
+        self.chat_messages = []
+        self.notification_enabled = True
+        
         # Setup menu bar first
         self.setup_menu_bar()
         
         self.setup_ui()
         self.start_keep_alive()
+        self.setup_notifications()
+    
+    def setup_notifications(self):
+        """Setup system notifications"""
+        try:
+            # Try to import plyer for cross-platform notifications
+            global plyer
+            import plyer
+            self.notification_available = True
+            print("✅ System notifications available")
+        except ImportError:
+            # Fallback to tkinter messagebox
+            self.notification_available = False
+            print("⚠️ System notifications not available, using fallback")
+    
+    def show_notification(self, title, message, timeout=3):
+        """Show system notification"""
+        if not self.notification_enabled:
+            return
+        
+        try:
+            if self.notification_available:
+                # Use plyer for system notifications
+                plyer.notification.notify(
+                    title=title,
+                    message=message,
+                    app_name="Novrintech Data Fall Back",
+                    timeout=timeout
+                )
+            else:
+                # Fallback to console print
+                print(f"🔔 {title}: {message}")
+        except Exception as e:
+            print(f"Notification error: {e}")
+    
+    def add_chat_message(self, message_type, title, content, user=None):
+        """Add message to chat system"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        message = {
+            "timestamp": timestamp,
+            "type": message_type,  # "upload", "download", "delete", "system", "user"
+            "title": title,
+            "content": content,
+            "user": user or self.load_user_name() or "Unknown"
+        }
+        
+        self.chat_messages.append(message)
+        
+        # Keep only last 100 messages
+        if len(self.chat_messages) > 100:
+            self.chat_messages = self.chat_messages[-100:]
+        
+        # Update chat display if it exists
+        if hasattr(self, 'chat_display'):
+            self.update_chat_display()
+        
+        # Save chat history
+        self.save_chat_history()
+    
+    def save_chat_history(self):
+        """Save chat history to file"""
+        try:
+            with open("chat_history.json", 'w') as f:
+                json.dump(self.chat_messages, f, indent=2)
+        except Exception as e:
+            print(f"Error saving chat history: {e}")
+    
+    def load_chat_history(self):
+        """Load chat history from file"""
+        try:
+            if os.path.exists("chat_history.json"):
+                with open("chat_history.json", 'r') as f:
+                    self.chat_messages = json.load(f)
+        except Exception as e:
+            print(f"Error loading chat history: {e}")
+            self.chat_messages = []
     
     def setup_menu_bar(self):
         """Setup the application menu bar"""
@@ -94,6 +178,8 @@ class NovrintechDesktopApp:
         view_menu.add_command(label="📁 File Upload", command=lambda: self.notebook.select(1))
         view_menu.add_command(label="📂 File Manager", command=lambda: self.notebook.select(2))
         view_menu.add_command(label="💾 Data Operations", command=lambda: self.notebook.select(3))
+        view_menu.add_command(label="💬 Chat & Notifications", command=lambda: self.notebook.select(4))
+        view_menu.add_command(label="💬 Chat & Notifications", command=lambda: self.notebook.select(4))
         view_menu.add_separator()
         view_menu.add_command(label="🔍 Zoom In", command=self.zoom_in, accelerator="Ctrl++")
         view_menu.add_command(label="🔍 Zoom Out", command=self.zoom_out, accelerator="Ctrl+-")
@@ -216,6 +302,16 @@ class NovrintechDesktopApp:
         data_frame = ttk.Frame(self.notebook, padding="15")
         self.notebook.add(data_frame, text="💾 Data Operations")
         self.setup_data_tab(data_frame)
+        
+        # Chat & Notifications Tab
+        chat_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(chat_frame, text="💬 Chat & Notifications")
+        self.setup_chat_tab(chat_frame)
+        
+        # Chat & Notifications Tab
+        chat_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(chat_frame, text="💬 Chat & Notifications")
+        self.setup_chat_tab(chat_frame)
         
         # Store references for menu actions
         self.canvas = canvas
@@ -450,6 +546,253 @@ class NovrintechDesktopApp:
         self.result_text = scrolledtext.ScrolledText(read_frame, height=8, width=60)
         self.result_text.pack(padx=10, pady=5)
     
+    def setup_chat_tab(self, parent):
+        """Setup chat and notifications tab"""
+        # Header
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(header_frame, text="💬 Chat & Notifications", style='Heading.TLabel').pack(anchor=tk.W)
+        ttk.Label(header_frame, text="Activity feed and messaging system", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
+        
+        # Main content with two columns
+        main_content = ttk.Frame(parent)
+        main_content.pack(fill=tk.BOTH, expand=True)
+        
+        # Left column - Activity Feed
+        left_frame = ttk.Frame(main_content)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
+        # Activity feed section
+        activity_section = ttk.LabelFrame(left_frame, text="📋 Activity Feed", padding="15")
+        activity_section.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        # Activity display
+        self.chat_display = scrolledtext.ScrolledText(
+            activity_section, 
+            height=15, 
+            width=50,
+            wrap=tk.WORD,
+            font=('Arial', 9),
+            state=tk.DISABLED
+        )
+        self.chat_display.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # Activity controls
+        activity_controls = ttk.Frame(activity_section)
+        activity_controls.pack(fill=tk.X)
+        
+        ttk.Button(activity_controls, text="🔄 Refresh", command=self.update_chat_display).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(activity_controls, text="🧹 Clear History", command=self.clear_chat_history).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(activity_controls, text="📤 Export Log", command=self.export_chat_log).pack(side=tk.LEFT)
+        
+        # Right column - Send Message & Settings
+        right_frame = ttk.Frame(main_content)
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
+        # Send message section
+        message_section = ttk.LabelFrame(right_frame, text="📤 Send Message", padding="15")
+        message_section.pack(fill=tk.X, pady=(0, 15))
+        
+        ttk.Label(message_section, text="Message Type:").pack(anchor=tk.W, pady=(0, 5))
+        self.message_type_var = tk.StringVar(value="user")
+        message_type_combo = ttk.Combobox(message_section, textvariable=self.message_type_var, 
+                                        values=["user", "system", "upload", "download"], 
+                                        state="readonly", width=25)
+        message_type_combo.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(message_section, text="Title:").pack(anchor=tk.W, pady=(0, 5))
+        self.message_title_entry = ttk.Entry(message_section, width=30)
+        self.message_title_entry.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(message_section, text="Message:").pack(anchor=tk.W, pady=(0, 5))
+        self.message_content_text = tk.Text(message_section, height=4, width=30, wrap=tk.WORD, font=('Arial', 9))
+        self.message_content_text.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Button(message_section, text="📤 Send Message", command=self.send_chat_message, style='Primary.TButton').pack(fill=tk.X)
+        
+        # Notification settings section
+        notif_section = ttk.LabelFrame(right_frame, text="🔔 Notification Settings", padding="15")
+        notif_section.pack(fill=tk.X, pady=(0, 15))
+        
+        self.notif_enabled_var = tk.BooleanVar(value=self.notification_enabled)
+        ttk.Checkbutton(notif_section, text="Enable notifications", 
+                       variable=self.notif_enabled_var, 
+                       command=self.toggle_notifications).pack(anchor=tk.W, pady=(0, 10))
+        
+        # Notification test
+        ttk.Button(notif_section, text="🧪 Test Notification", command=self.test_notification).pack(fill=tk.X, pady=(0, 5))
+        
+        # Auto-notify settings
+        self.auto_notify_upload_var = tk.BooleanVar(value=True)
+        self.auto_notify_download_var = tk.BooleanVar(value=True)
+        self.auto_notify_delete_var = tk.BooleanVar(value=True)
+        
+        ttk.Checkbutton(notif_section, text="Notify on upload", variable=self.auto_notify_upload_var).pack(anchor=tk.W)
+        ttk.Checkbutton(notif_section, text="Notify on download", variable=self.auto_notify_download_var).pack(anchor=tk.W)
+        ttk.Checkbutton(notif_section, text="Notify on delete", variable=self.auto_notify_delete_var).pack(anchor=tk.W)
+        
+        # Statistics section
+        stats_section = ttk.LabelFrame(right_frame, text="📊 Statistics", padding="15")
+        stats_section.pack(fill=tk.X)
+        
+        self.stats_label = ttk.Label(stats_section, text="Loading statistics...", font=('Arial', 8))
+        self.stats_label.pack(anchor=tk.W)
+        
+        # Load chat history and update display
+        self.load_chat_history()
+        
+        # Add startup message
+        self.add_chat_message("system", "Application Started", 
+                            f"Novrintech Data Fall Back Desktop Client v2.0 started successfully", "System")
+        
+        self.update_chat_display()
+        self.update_chat_stats()
+    
+    def update_chat_display(self):
+        """Update the chat display with recent messages"""
+        if not hasattr(self, 'chat_display'):
+            return
+        
+        self.chat_display.config(state=tk.NORMAL)
+        self.chat_display.delete(1.0, tk.END)
+        
+        # Display recent messages (last 50)
+        recent_messages = self.chat_messages[-50:] if len(self.chat_messages) > 50 else self.chat_messages
+        
+        for message in recent_messages:
+            timestamp = message.get('timestamp', '')
+            msg_type = message.get('type', 'user')
+            title = message.get('title', '')
+            content = message.get('content', '')
+            user = message.get('user', 'Unknown')
+            
+            # Format message with colors and icons
+            type_icons = {
+                'upload': '📤',
+                'download': '📥',
+                'delete': '🗑️',
+                'system': '⚙️',
+                'user': '💬'
+            }
+            
+            icon = type_icons.get(msg_type, '💬')
+            
+            # Insert formatted message
+            self.chat_display.insert(tk.END, f"[{timestamp}] {icon} {title}\n", f"title_{msg_type}")
+            self.chat_display.insert(tk.END, f"👤 {user}: {content}\n\n", f"content_{msg_type}")
+        
+        # Configure text tags for colors
+        self.chat_display.tag_config("title_upload", foreground="#2196F3", font=('Arial', 9, 'bold'))
+        self.chat_display.tag_config("title_download", foreground="#4CAF50", font=('Arial', 9, 'bold'))
+        self.chat_display.tag_config("title_delete", foreground="#f44336", font=('Arial', 9, 'bold'))
+        self.chat_display.tag_config("title_system", foreground="#FF9800", font=('Arial', 9, 'bold'))
+        self.chat_display.tag_config("title_user", foreground="#9C27B0", font=('Arial', 9, 'bold'))
+        
+        self.chat_display.tag_config("content_upload", foreground="#1976D2")
+        self.chat_display.tag_config("content_download", foreground="#388E3C")
+        self.chat_display.tag_config("content_delete", foreground="#D32F2F")
+        self.chat_display.tag_config("content_system", foreground="#F57C00")
+        self.chat_display.tag_config("content_user", foreground="#7B1FA2")
+        
+        self.chat_display.config(state=tk.DISABLED)
+        self.chat_display.see(tk.END)  # Scroll to bottom
+    
+    def send_chat_message(self):
+        """Send a custom chat message"""
+        title = self.message_title_entry.get().strip()
+        content = self.message_content_text.get(1.0, tk.END).strip()
+        msg_type = self.message_type_var.get()
+        
+        if not title or not content:
+            messagebox.showwarning("Incomplete", "Please enter both title and message")
+            return
+        
+        # Add message to chat
+        self.add_chat_message(msg_type, title, content)
+        
+        # Clear form
+        self.message_title_entry.delete(0, tk.END)
+        self.message_content_text.delete(1.0, tk.END)
+        
+        # Show notification
+        self.show_notification("💬 Message Sent", f"{title}: {content[:50]}...")
+        
+        # Update stats
+        self.update_chat_stats()
+    
+    def clear_chat_history(self):
+        """Clear chat history"""
+        result = messagebox.askyesno("Clear History", "Are you sure you want to clear all chat history?")
+        if result:
+            self.chat_messages = []
+            self.save_chat_history()
+            self.update_chat_display()
+            self.update_chat_stats()
+            self.show_notification("🧹 History Cleared", "Chat history has been cleared")
+    
+    def export_chat_log(self):
+        """Export chat log to file"""
+        if not self.chat_messages:
+            messagebox.showwarning("No Data", "No chat messages to export")
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            title="Export Chat Log",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                if filename.endswith('.json'):
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(self.chat_messages, f, indent=2)
+                else:
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write("Novrintech Data Fall Back - Chat Log\n")
+                        f.write("=" * 50 + "\n\n")
+                        
+                        for message in self.chat_messages:
+                            f.write(f"[{message.get('timestamp', '')}] {message.get('type', '').upper()}\n")
+                            f.write(f"Title: {message.get('title', '')}\n")
+                            f.write(f"User: {message.get('user', 'Unknown')}\n")
+                            f.write(f"Content: {message.get('content', '')}\n")
+                            f.write("-" * 30 + "\n\n")
+                
+                self.show_notification("📤 Export Complete", f"Chat log exported to {os.path.basename(filename)}")
+                messagebox.showinfo("Success", f"Chat log exported to:\n{filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Export failed: {str(e)}")
+    
+    def toggle_notifications(self):
+        """Toggle notification settings"""
+        self.notification_enabled = self.notif_enabled_var.get()
+        status = "enabled" if self.notification_enabled else "disabled"
+        self.show_notification("🔔 Notifications", f"Notifications {status}")
+    
+    def test_notification(self):
+        """Test system notification"""
+        self.show_notification("🧪 Test Notification", "This is a test notification from Novrintech Data Fall Back!")
+    
+    def update_chat_stats(self):
+        """Update chat statistics"""
+        if not hasattr(self, 'stats_label'):
+            return
+        
+        total_messages = len(self.chat_messages)
+        upload_count = len([m for m in self.chat_messages if m.get('type') == 'upload'])
+        download_count = len([m for m in self.chat_messages if m.get('type') == 'download'])
+        user_messages = len([m for m in self.chat_messages if m.get('type') == 'user'])
+        
+        stats_text = f"""Total Messages: {total_messages}
+Upload Activities: {upload_count}
+Download Activities: {download_count}
+User Messages: {user_messages}
+Notifications: {'Enabled' if self.notification_enabled else 'Disabled'}"""
+        
+        self.stats_label.config(text=stats_text)
+    
     def start_keep_alive(self):
         """Start keep-alive pinging to prevent backend from sleeping"""
         if not self.keep_alive_running:
@@ -676,6 +1019,13 @@ class NovrintechDesktopApp:
                 
                 messagebox.showinfo("Upload Success", success_msg)
                 
+                # Add to chat and show notification
+                self.add_chat_message("upload", f"File Uploaded: {filename}", 
+                                    f"Successfully uploaded {filename} to server", user_name)
+                
+                if self.auto_notify_upload_var.get() if hasattr(self, 'auto_notify_upload_var') else True:
+                    self.show_notification("📤 Upload Complete", f"{user_name} uploaded {filename}")
+                
                 # Clear selection
                 self.selected_file_label.config(text="📄 No file selected")
                 if hasattr(self, 'selected_file'):
@@ -837,6 +1187,14 @@ class NovrintechDesktopApp:
                 self.files_status_label.config(text=f"✅ Downloaded {file_name} ({self.format_file_size(file_size)})", foreground="green")
                 messagebox.showinfo("Success", f"File downloaded successfully!\n\nSaved to: {save_path}\nSize: {self.format_file_size(file_size)}")
                 
+                # Add to chat and show notification
+                user_name = self.load_user_name() or "Unknown"
+                self.add_chat_message("download", f"File Downloaded: {file_name}", 
+                                    f"Downloaded {file_name} ({self.format_file_size(file_size)}) to {os.path.basename(save_path)}", user_name)
+                
+                if self.auto_notify_download_var.get() if hasattr(self, 'auto_notify_download_var') else True:
+                    self.show_notification("📥 Download Complete", f"Downloaded {file_name} ({self.format_file_size(file_size)})")
+                
             else:
                 self.files_status_label.config(text="❌ Download failed", foreground="red")
                 messagebox.showerror("Error", f"Download failed: {response.text}")
@@ -895,6 +1253,14 @@ class NovrintechDesktopApp:
                 result_data = response.json()
                 self.files_status_label.config(text=f"✅ Deleted {file_name}", foreground="green")
                 messagebox.showinfo("Success", f"File '{file_name}' deleted successfully from server!")
+                
+                # Add to chat and show notification
+                user_name = self.load_user_name() or "Unknown"
+                self.add_chat_message("delete", f"File Deleted: {file_name}", 
+                                    f"Permanently deleted {file_name} from server", user_name)
+                
+                if self.auto_notify_delete_var.get() if hasattr(self, 'auto_notify_delete_var') else True:
+                    self.show_notification("🗑️ Delete Complete", f"Deleted {file_name} from server")
                 
                 # Also remove from local history if it exists
                 if file_name in self.uploaded_files:
@@ -1222,17 +1588,43 @@ Status: ✅ File exists on server"""
     
     def zoom_in(self):
         """Increase UI scale"""
-        current_font = self.root.option_get("font", "TkDefaultFont")
-        # Simple zoom implementation - could be enhanced
-        messagebox.showinfo("Zoom", "Zoom In - Feature coming soon!")
+        if self.ui_scale < 2.0:  # Max 200% zoom
+            self.ui_scale += 0.1
+            self.apply_zoom()
+            self.show_notification("🔍 Zoomed In", f"UI Scale: {int(self.ui_scale * 100)}%")
     
     def zoom_out(self):
         """Decrease UI scale"""
-        messagebox.showinfo("Zoom", "Zoom Out - Feature coming soon!")
+        if self.ui_scale > 0.5:  # Min 50% zoom
+            self.ui_scale -= 0.1
+            self.apply_zoom()
+            self.show_notification("🔍 Zoomed Out", f"UI Scale: {int(self.ui_scale * 100)}%")
     
     def reset_zoom(self):
         """Reset UI scale to default"""
-        messagebox.showinfo("Zoom", "Reset Zoom - Feature coming soon!")
+        self.ui_scale = 1.0
+        self.apply_zoom()
+        self.show_notification("🔍 Zoom Reset", "UI Scale: 100%")
+    
+    def apply_zoom(self):
+        """Apply zoom scale to UI elements"""
+        try:
+            # Calculate new font size
+            new_font_size = int(self.base_font_size * self.ui_scale)
+            
+            # Update style configurations
+            style = ttk.Style()
+            style.configure('Title.TLabel', font=('Arial', new_font_size + 6, 'bold'))
+            style.configure('Heading.TLabel', font=('Arial', new_font_size + 2, 'bold'))
+            style.configure('Success.TLabel', font=('Arial', new_font_size))
+            style.configure('Error.TLabel', font=('Arial', new_font_size))
+            style.configure('Primary.TButton', font=('Arial', new_font_size, 'bold'))
+            
+            # Update other UI elements
+            self.root.option_add('*Font', f'Arial {new_font_size}')
+            
+        except Exception as e:
+            print(f"Zoom error: {e}")
     
     def clear_upload_history(self):
         """Clear upload history"""
