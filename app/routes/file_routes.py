@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_db
 from app.services.async_postgres_service import AsyncPostgresService
+from app.models.app_model import App, AppStatus
 import os
 import uuid
 
@@ -17,39 +18,70 @@ async def upload_file(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Upload file and save metadata"""
-    # Handle app_id - use default if middleware is disabled
     try:
-        app_id = request.state.app_id
-    except AttributeError:
-        # Default app_id for testing when middleware is disabled
-        app_id = "00000000-0000-0000-0000-000000000000"
+        # Handle app_id - use default if middleware is disabled
+        try:
+            app_id = request.state.app_id
+        except AttributeError:
+            # Default app_id for testing when middleware is disabled
+            app_id = "00000000-0000-0000-0000-000000000000"
+            
+            # Ensure default app exists
+            from sqlalchemy import select
+            result = await db.execute(
+                select(App).where(App.id == uuid.UUID(app_id))
+            )
+            default_app = result.scalar_one_or_none()
+            
+            if not default_app:
+                # Create default app for testing
+                default_app = App(
+                    id=uuid.UUID(app_id),
+                    app_name="Default Test App",
+                    api_key="novrintech_api_key_2024_secure",
+                    status=AppStatus.active
+                )
+                db.add(default_app)
+                await db.commit()
+        
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Save metadata to database
+        postgres_service = AsyncPostgresService(db)
+        file_record = await postgres_service.save_file_metadata(
+            app_id=app_id,
+            file_name=file.filename,
+            file_path=file_path,
+            file_type=file.content_type
+        )
+        
+        return {
+            "success": True,
+            "message": "File uploaded successfully",
+            "file_id": str(file_record.id),
+            "file_name": file.filename,
+            "file_type": file.content_type
+        }
     
-    # Generate unique filename
-    file_extension = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    
-    # Save file
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-    
-    # Save metadata to database
-    postgres_service = AsyncPostgresService(db)
-    file_record = await postgres_service.save_file_metadata(
-        app_id=app_id,
-        file_name=file.filename,
-        file_path=file_path,
-        file_type=file.content_type
-    )
-    
-    return {
-        "success": True,
-        "message": "File uploaded successfully",
-        "file_id": str(file_record.id),
-        "file_name": file.filename,
-        "file_type": file.content_type
-    }
+    except Exception as e:
+        # Log the error for debugging
+        print(f"❌ Upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return detailed error for debugging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload failed: {str(e)}"
+        )
 
 @router.get("/read/{file_id}")
 async def read_file(
