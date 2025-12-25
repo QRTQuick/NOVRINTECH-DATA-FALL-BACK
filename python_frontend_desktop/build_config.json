@@ -1,0 +1,32 @@
+{
+  "app_name": "NovrintechDataFallBack",
+  "version": "2.0.0",
+  "description": "Novrintech Data Fall Back Desktop Client",
+  "author": "Novrintech Solutions",
+  "main_file": "main.py",
+  "icon": "app_icon.ico",
+  "console": false,
+  "onefile": true,
+  "hidden_imports": [
+    "plyer.platforms.win.notification",
+    "plyer.platforms.macosx.notification",
+    "plyer.platforms.linux.notification",
+    "plyer.facades.notification",
+    "requests.packages.urllib3",
+    "dotenv",
+    "notification_system"
+  ],
+  "exclude_modules": [
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scipy",
+    "PIL",
+    "cv2"
+  ],
+  "include_files": [
+    "notification_system.py",
+    "requirements_desktop.txt",
+    ".env"
+  ]
+}

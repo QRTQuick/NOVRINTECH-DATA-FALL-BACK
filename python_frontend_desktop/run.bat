@@ -1,5 +1,7 @@
 @echo off
-echo Starting Novrintech Desktop Client...
+echo ========================================
+echo Novrintech Desktop Client v2.0 - AI Enhanced
+echo ========================================
 echo.
 
 REM Check if Python is installed
@@ -10,6 +12,10 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+echo Testing AI Integration...
+python test_ai_integration.py
+echo.
 
 REM Install requirements if needed
 if not exist "venv" (
@@ -24,7 +30,15 @@ echo Installing/updating requirements...
 pip install -r requirements.txt
 
 echo.
-echo Starting application...
+echo Features in this version:
+echo - File Upload/Download/Management with User Tracking
+echo - JSON Data Operations and Storage
+echo - AI Assistant with Complete Application Knowledge
+echo - Real-time Chat and Notifications System
+echo - Keep-alive System for Server Health Monitoring
+echo - Keyboard Shortcuts and Modern UI
+echo.
+echo Starting Enhanced Desktop Application...
 python main.py
 
 pause

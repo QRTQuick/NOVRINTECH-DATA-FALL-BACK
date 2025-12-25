@@ -3,15 +3,71 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 import requests
 import json
 import os
+import sys
 from datetime import datetime
 import hashlib
 from pathlib import Path
-from dotenv import load_dotenv
 import threading
 import time
 
-# Load environment variables
-load_dotenv()
+# Enhanced imports for new features
+try:
+    from ai_service import AIService
+    from config import APP_CONTEXT, UPDATE_CONFIG, CHAT_SYNC_CONFIG
+    from github_updater import GitHubUpdater
+    from enhanced_chat_db import ChatDatabaseManager, ChatSyncUI, UpdateUI
+    AI_FEATURES_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Some features not available: {e}")
+    AI_FEATURES_AVAILABLE = False
+
+# EXE-safe environment loading
+def load_env_safe():
+    """Load environment variables safely for EXE compilation"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        # dotenv not available in EXE, use fallback
+        pass
+
+# EXE-safe notification system
+def setup_notifications_safe():
+    """Setup notifications with EXE-safe fallback"""
+    try:
+        import plyer
+        return plyer, True
+    except ImportError:
+        # Create a mock plyer for EXE compatibility
+        class MockNotification:
+            @staticmethod
+            def notify(title="", message="", app_name="", timeout=3):
+                print(f"🔔 {title}: {message}")
+        
+        class MockPlyer:
+            notification = MockNotification()
+        
+        return MockPlyer(), False
+
+# EXE-safe file path handling
+def get_app_data_dir():
+    """Get application data directory (EXE-safe)"""
+    if getattr(sys, 'frozen', False):
+        # Running as EXE
+        app_dir = os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Create data directory if it doesn't exist
+    data_dir = os.path.join(app_dir, "app_data")
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+# Initialize safely
+load_env_safe()
+plyer, notification_available = setup_notifications_safe()
+APP_DATA_DIR = get_app_data_dir()
 
 class NovrintechDesktopApp:
     def __init__(self, root):
@@ -62,9 +118,28 @@ class NovrintechDesktopApp:
         self.ui_scale = 1.0
         self.base_font_size = 10
         
-        # Chat and notification system
+        # Chat and notification system (EXE-safe)
         self.chat_messages = []
         self.notification_enabled = True
+        self.notification_available = notification_available
+        self.plyer = plyer
+        
+        # Initialize AI Service
+        self.ai_service = AIService()
+        self.ai_chat_messages = []
+        
+        # Initialize GitHub updater
+        self.updater = GitHubUpdater()
+        self.update_available = False
+        
+        # Initialize chat database manager
+        self.chat_db_manager = ChatDatabaseManager(self.api_base_url, self.api_key)
+        
+        # EXE-safe file paths
+        self.app_data_dir = APP_DATA_DIR
+        self.history_file = os.path.join(self.app_data_dir, "upload_history.json")
+        self.settings_file = os.path.join(self.app_data_dir, "user_settings.json")
+        self.chat_file = os.path.join(self.app_data_dir, "chat_history.json")
         
         # Setup menu bar first
         self.setup_menu_bar()
@@ -72,42 +147,44 @@ class NovrintechDesktopApp:
         self.setup_ui()
         self.start_keep_alive()
         self.setup_notifications()
+        
+        # Start auto-update checker
+        self.start_update_checker()
+        
+        # Start chat database auto-sync
+        self.start_chat_sync()
     
     def setup_notifications(self):
-        """Setup system notifications"""
+        """Setup EXE-safe notification system"""
         try:
-            # Try to import plyer for cross-platform notifications
-            global plyer
-            import plyer
+            # Import our EXE-safe notification system
+            from notification_system import get_notification_system
+            self.notification_system = get_notification_system()
             self.notification_available = True
-            print("✅ System notifications available")
+            print("✅ EXE-safe notification system initialized")
         except ImportError:
-            # Fallback to tkinter messagebox
+            # Ultimate fallback
             self.notification_available = False
-            print("⚠️ System notifications not available, using fallback")
+            print("⚠️ Notification system not available")
     
     def show_notification(self, title, message, timeout=3):
-        """Show system notification"""
+        """Show EXE-safe notification"""
         if not self.notification_enabled:
             return
         
         try:
-            if self.notification_available:
-                # Use plyer for system notifications
-                plyer.notification.notify(
-                    title=title,
-                    message=message,
-                    app_name="Novrintech Data Fall Back",
-                    timeout=timeout
-                )
+            if self.notification_available and hasattr(self, 'notification_system'):
+                return self.notification_system.show_notification(title, message, timeout)
             else:
-                # Fallback to console print
+                # Console fallback
                 print(f"🔔 {title}: {message}")
+                return True
         except Exception as e:
             print(f"Notification error: {e}")
+            return False
     
     def add_chat_message(self, message_type, title, content, user=None):
-        """Add message to chat system"""
+        """Add message to chat system with database sync"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = {
             "timestamp": timestamp,
@@ -119,7 +196,10 @@ class NovrintechDesktopApp:
         
         self.chat_messages.append(message)
         
-        # Keep only last 100 messages
+        # Add to database sync queue
+        self.chat_db_manager.add_message_to_sync_queue(message)
+        
+        # Keep only last 100 messages in memory
         if len(self.chat_messages) > 100:
             self.chat_messages = self.chat_messages[-100:]
         
@@ -127,7 +207,7 @@ class NovrintechDesktopApp:
         if hasattr(self, 'chat_display'):
             self.update_chat_display()
         
-        # Save chat history
+        # Save chat history locally (backup)
         self.save_chat_history()
     
     def save_chat_history(self):
@@ -178,8 +258,8 @@ class NovrintechDesktopApp:
         view_menu.add_command(label="📁 File Upload", command=lambda: self.notebook.select(1))
         view_menu.add_command(label="📂 File Manager", command=lambda: self.notebook.select(2))
         view_menu.add_command(label="💾 Data Operations", command=lambda: self.notebook.select(3))
-        view_menu.add_command(label="💬 Chat & Notifications", command=lambda: self.notebook.select(4))
-        view_menu.add_command(label="💬 Chat & Notifications", command=lambda: self.notebook.select(4))
+        view_menu.add_command(label="🤖 AI Assistant", command=lambda: self.notebook.select(4))
+        view_menu.add_command(label="💬 Chat & Notifications", command=lambda: self.notebook.select(5))
         view_menu.add_separator()
         view_menu.add_command(label="🔍 Zoom In", command=self.zoom_in, accelerator="Ctrl++")
         view_menu.add_command(label="🔍 Zoom Out", command=self.zoom_out, accelerator="Ctrl+-")
@@ -303,10 +383,10 @@ class NovrintechDesktopApp:
         self.notebook.add(data_frame, text="💾 Data Operations")
         self.setup_data_tab(data_frame)
         
-        # Chat & Notifications Tab
-        chat_frame = ttk.Frame(self.notebook, padding="15")
-        self.notebook.add(chat_frame, text="💬 Chat & Notifications")
-        self.setup_chat_tab(chat_frame)
+        # AI Assistant Tab
+        ai_frame = ttk.Frame(self.notebook, padding="15")
+        self.notebook.add(ai_frame, text="🤖 AI Assistant")
+        self.setup_ai_tab(ai_frame)
         
         # Chat & Notifications Tab
         chat_frame = ttk.Frame(self.notebook, padding="15")
@@ -546,6 +626,281 @@ class NovrintechDesktopApp:
         self.result_text = scrolledtext.ScrolledText(read_frame, height=8, width=60)
         self.result_text.pack(padx=10, pady=5)
     
+    def setup_ai_tab(self, parent):
+        """Setup AI Assistant tab with comprehensive application awareness"""
+        # Header
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(header_frame, text="🤖 AI Assistant", style='Heading.TLabel').pack(anchor=tk.W)
+        ttk.Label(header_frame, text="Intelligent assistant with complete application knowledge", font=('Arial', 9, 'italic')).pack(anchor=tk.W)
+        
+        # AI Status section
+        status_section = ttk.LabelFrame(parent, text="AI Backend Status", padding="15")
+        status_section.pack(fill=tk.X, pady=(0, 15))
+        
+        status_row = ttk.Frame(status_section)
+        status_row.pack(fill=tk.X)
+        
+        self.ai_status_label = ttk.Label(status_row, text="🔄 Checking AI connection...", font=('Arial', 10))
+        self.ai_status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        ttk.Button(status_row, text="🔍 Check AI Health", command=self.check_ai_health).pack(side=tk.RIGHT)
+        
+        # Main AI interface with two columns
+        main_ai_frame = ttk.Frame(parent)
+        main_ai_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Left column - Chat interface
+        left_ai_frame = ttk.Frame(main_ai_frame)
+        left_ai_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
+        # AI Chat section
+        chat_section = ttk.LabelFrame(left_ai_frame, text="💬 Chat with AI Assistant", padding="15")
+        chat_section.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        # AI Chat display
+        self.ai_chat_display = scrolledtext.ScrolledText(
+            chat_section, 
+            height=20, 
+            width=60,
+            wrap=tk.WORD,
+            font=('Arial', 10),
+            state=tk.DISABLED,
+            bg='#f8f9fa',
+            fg='#333333'
+        )
+        self.ai_chat_display.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # AI Input section
+        input_section = ttk.Frame(chat_section)
+        input_section.pack(fill=tk.X)
+        
+        # Message input
+        input_row = ttk.Frame(input_section)
+        input_row.pack(fill=tk.X, pady=(0, 10))
+        
+        self.ai_message_entry = tk.Text(input_row, height=3, width=50, wrap=tk.WORD, font=('Arial', 10))
+        self.ai_message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        
+        # Send button
+        send_button_frame = ttk.Frame(input_row)
+        send_button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.ai_send_button = ttk.Button(send_button_frame, text="🚀 Send", command=self.send_ai_message, style='Primary.TButton')
+        self.ai_send_button.pack(fill=tk.X, pady=(0, 5))
+        
+        ttk.Button(send_button_frame, text="🧹 Clear", command=self.clear_ai_chat).pack(fill=tk.X)
+        
+        # Bind Enter key to send message
+        self.ai_message_entry.bind('<Control-Return>', lambda e: self.send_ai_message())
+        
+        # Right column - Quick actions and context
+        right_ai_frame = ttk.Frame(main_ai_frame)
+        right_ai_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
+        # Quick Questions section
+        quick_section = ttk.LabelFrame(right_ai_frame, text="💡 Quick Questions", padding="15")
+        quick_section.pack(fill=tk.X, pady=(0, 15))
+        
+        # Suggested questions
+        suggested_questions = self.ai_service.get_suggested_questions()[:8]  # Show first 8
+        
+        for i, question in enumerate(suggested_questions):
+            btn = ttk.Button(quick_section, 
+                           text=f"{question[:40]}..." if len(question) > 40 else question,
+                           command=lambda q=question: self.ask_quick_question(q))
+            btn.pack(fill=tk.X, pady=2)
+        
+        # Application Context section
+        context_section = ttk.LabelFrame(right_ai_frame, text="📋 Application Context", padding="15")
+        context_section.pack(fill=tk.X, pady=(0, 15))
+        
+        context_info = f"""The AI assistant knows about:
+
+✅ All application features and capabilities
+✅ File upload and management processes  
+✅ Data operations and JSON storage
+✅ API endpoints and technical details
+✅ Keyboard shortcuts and UI navigation
+✅ Troubleshooting and error resolution
+✅ Keep-alive system and server management
+✅ Notification system and chat features
+
+Ask anything about this application!"""
+        
+        ttk.Label(context_section, text=context_info, font=('Arial', 9), justify=tk.LEFT, wraplength=250).pack(anchor=tk.W)
+        
+        # Quick Help section
+        help_section = ttk.LabelFrame(right_ai_frame, text="🆘 Quick Help", padding="15")
+        help_section.pack(fill=tk.X)
+        
+        help_topics = ["upload", "download", "delete", "shortcuts", "connection", "data"]
+        
+        for topic in help_topics:
+            btn = ttk.Button(help_section, 
+                           text=f"Help: {topic.title()}",
+                           command=lambda t=topic: self.show_quick_help(t))
+            btn.pack(fill=tk.X, pady=2)
+        
+        # Initialize AI chat with welcome message
+        self.initialize_ai_chat()
+        
+        # Check AI health on startup
+        threading.Thread(target=self.check_ai_health, daemon=True).start()
+    
+    def initialize_ai_chat(self):
+        """Initialize AI chat with welcome message"""
+        welcome_message = f"""🤖 Welcome to the AI Assistant!
+
+I'm your intelligent assistant with complete knowledge of the Novrintech Data Fall Back Desktop Client. I understand:
+
+• All application features and how they work
+• File upload, download, and management processes
+• Data operations and JSON storage capabilities
+• API endpoints and technical architecture
+• Troubleshooting steps and error resolution
+• Keyboard shortcuts and UI navigation
+• Keep-alive system and server management
+
+Feel free to ask me anything about this application! I can help you:
+- Understand how features work
+- Troubleshoot issues
+- Learn keyboard shortcuts
+- Explain technical concepts
+- Guide you through workflows
+
+Try asking: "How do I upload files?" or "What keyboard shortcuts are available?"
+"""
+        
+        self.add_ai_message("assistant", welcome_message)
+    
+    def send_ai_message(self):
+        """Send message to AI assistant"""
+        message = self.ai_message_entry.get(1.0, tk.END).strip()
+        if not message:
+            return
+        
+        # Clear input
+        self.ai_message_entry.delete(1.0, tk.END)
+        
+        # Add user message to display
+        self.add_ai_message("user", message)
+        
+        # Disable send button during request
+        self.ai_send_button.config(state='disabled', text="🔄 Thinking...")
+        
+        # Send to AI in background thread
+        threading.Thread(target=self.process_ai_request, args=(message,), daemon=True).start()
+    
+    def process_ai_request(self, message):
+        """Process AI request in background thread"""
+        try:
+            # Send to AI service
+            result = self.ai_service.send_message_to_ai(message, include_context=True)
+            
+            # Update UI in main thread
+            if result["success"]:
+                self.root.after(0, lambda: self.add_ai_message("assistant", result["response"]))
+            else:
+                error_msg = f"❌ {result['error']}"
+                self.root.after(0, lambda: self.add_ai_message("system", error_msg))
+                
+        except Exception as e:
+            error_msg = f"❌ Unexpected error: {str(e)}"
+            self.root.after(0, lambda: self.add_ai_message("system", error_msg))
+        finally:
+            # Re-enable send button
+            self.root.after(0, lambda: self.ai_send_button.config(state='normal', text="🚀 Send"))
+    
+    def add_ai_message(self, role, message):
+        """Add message to AI chat display"""
+        if not hasattr(self, 'ai_chat_display'):
+            return
+        
+        self.ai_chat_display.config(state=tk.NORMAL)
+        
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Format message based on role
+        if role == "user":
+            self.ai_chat_display.insert(tk.END, f"[{timestamp}] 👤 You:\n", "user_header")
+            self.ai_chat_display.insert(tk.END, f"{message}\n\n", "user_message")
+        elif role == "assistant":
+            self.ai_chat_display.insert(tk.END, f"[{timestamp}] 🤖 AI Assistant:\n", "ai_header")
+            self.ai_chat_display.insert(tk.END, f"{message}\n\n", "ai_message")
+        elif role == "system":
+            self.ai_chat_display.insert(tk.END, f"[{timestamp}] ⚙️ System:\n", "system_header")
+            self.ai_chat_display.insert(tk.END, f"{message}\n\n", "system_message")
+        
+        # Configure text tags for styling
+        self.ai_chat_display.tag_config("user_header", foreground="#2196F3", font=('Arial', 10, 'bold'))
+        self.ai_chat_display.tag_config("user_message", foreground="#1976D2", font=('Arial', 10))
+        
+        self.ai_chat_display.tag_config("ai_header", foreground="#4CAF50", font=('Arial', 10, 'bold'))
+        self.ai_chat_display.tag_config("ai_message", foreground="#388E3C", font=('Arial', 10))
+        
+        self.ai_chat_display.tag_config("system_header", foreground="#FF9800", font=('Arial', 10, 'bold'))
+        self.ai_chat_display.tag_config("system_message", foreground="#F57C00", font=('Arial', 10))
+        
+        self.ai_chat_display.config(state=tk.DISABLED)
+        self.ai_chat_display.see(tk.END)
+        
+        # Save to AI chat history
+        self.ai_chat_messages.append({
+            "role": role,
+            "message": message,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Keep history manageable
+        if len(self.ai_chat_messages) > 100:
+            self.ai_chat_messages = self.ai_chat_messages[-100:]
+    
+    def ask_quick_question(self, question):
+        """Ask a predefined quick question"""
+        self.ai_message_entry.delete(1.0, tk.END)
+        self.ai_message_entry.insert(1.0, question)
+        self.send_ai_message()
+    
+    def show_quick_help(self, topic):
+        """Show quick help for a topic"""
+        help_text = self.ai_service.get_quick_help(topic)
+        self.add_ai_message("system", f"Quick Help - {topic.title()}:\n\n{help_text}")
+    
+    def clear_ai_chat(self):
+        """Clear AI chat display"""
+        if hasattr(self, 'ai_chat_display'):
+            self.ai_chat_display.config(state=tk.NORMAL)
+            self.ai_chat_display.delete(1.0, tk.END)
+            self.ai_chat_display.config(state=tk.DISABLED)
+        
+        self.ai_chat_messages = []
+        self.ai_service.clear_ai_chat_history()
+        
+        # Reinitialize with welcome message
+        self.initialize_ai_chat()
+    
+    def check_ai_health(self):
+        """Check AI backend health"""
+        try:
+            result = self.ai_service.check_ai_health()
+            
+            if result["success"]:
+                status_text = f"🟢 AI Backend Online - Response: {result['response_time']:.2f}s"
+                status_color = "green"
+            else:
+                status_text = f"🔴 AI Backend Offline - {result['error']}"
+                status_color = "red"
+            
+            # Update status label
+            if hasattr(self, 'ai_status_label'):
+                self.ai_status_label.config(text=status_text, foreground=status_color)
+                
+        except Exception as e:
+            if hasattr(self, 'ai_status_label'):
+                self.ai_status_label.config(text=f"🔴 AI Health Check Failed: {str(e)}", foreground="red")
+    
     def setup_chat_tab(self, parent):
         """Setup chat and notifications tab"""
         # Header
@@ -634,10 +989,40 @@ class NovrintechDesktopApp:
         
         # Statistics section
         stats_section = ttk.LabelFrame(right_frame, text="📊 Statistics", padding="15")
-        stats_section.pack(fill=tk.X)
+        stats_section.pack(fill=tk.X, pady=(0, 15))
         
         self.stats_label = ttk.Label(stats_section, text="Loading statistics...", font=('Arial', 8))
         self.stats_label.pack(anchor=tk.W)
+        
+        # Chat Database Sync section
+        sync_section = ttk.LabelFrame(right_frame, text="💾 Database Sync", padding="15")
+        sync_section.pack(fill=tk.X, pady=(0, 15))
+        
+        # Sync status
+        self.sync_status_label = ttk.Label(sync_section, text="🟢 Auto-sync enabled", font=('Arial', 9))
+        self.sync_status_label.pack(anchor=tk.W, pady=(0, 10))
+        
+        # Sync controls
+        sync_controls = ttk.Frame(sync_section)
+        sync_controls.pack(fill=tk.X)
+        
+        ttk.Button(sync_controls, text="🔄 Sync Now", command=self.manual_sync_chat).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(sync_controls, text="📊 Sync Stats", command=self.show_sync_statistics).pack(side=tk.LEFT)
+        
+        # Update System section
+        update_section = ttk.LabelFrame(right_frame, text="🔄 Updates", padding="15")
+        update_section.pack(fill=tk.X)
+        
+        # Update status
+        self.update_status_label = ttk.Label(update_section, text="✅ Up to date", font=('Arial', 9))
+        self.update_status_label.pack(anchor=tk.W, pady=(0, 10))
+        
+        # Update controls
+        update_controls = ttk.Frame(update_section)
+        update_controls.pack(fill=tk.X)
+        
+        ttk.Button(update_controls, text="🔍 Check Updates", command=self.check_for_updates_manually).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(update_controls, text="ℹ️ Version Info", command=self.show_version_info).pack(side=tk.LEFT)
         
         # Load chat history and update display
         self.load_chat_history()
@@ -1165,7 +1550,7 @@ Notifications: {'Enabled' if self.notification_enabled else 'Disabled'}"""
         from tkinter import filedialog
         save_path = filedialog.asksaveasfilename(
             title="Save file as...",
-            initialvalue=file_name,
+            initialfile=file_name,
             defaultextension="",
             filetypes=[("All files", "*.*")]
         )
@@ -1195,9 +1580,17 @@ Notifications: {'Enabled' if self.notification_enabled else 'Disabled'}"""
                 if self.auto_notify_download_var.get() if hasattr(self, 'auto_notify_download_var') else True:
                     self.show_notification("📥 Download Complete", f"Downloaded {file_name} ({self.format_file_size(file_size)})")
                 
+            elif response.status_code == 404:
+                self.files_status_label.config(text="❌ File not found on server", foreground="red")
+                error_msg = "File not found on server. This can happen if:\n\n"
+                error_msg += "• The server was restarted (cloud deployments)\n"
+                error_msg += "• The file was deleted by another user\n"
+                error_msg += "• There's a server storage issue\n\n"
+                error_msg += "Try uploading the file again."
+                messagebox.showerror("File Not Found", error_msg)
             else:
                 self.files_status_label.config(text="❌ Download failed", foreground="red")
-                messagebox.showerror("Error", f"Download failed: {response.text}")
+                messagebox.showerror("Error", f"Download failed: {response.status_code}\n{response.text}")
         
         except Exception as e:
             self.files_status_label.config(text="❌ Download error", foreground="red")
@@ -1993,8 +2386,117 @@ Built with Python & Tkinter
     def on_closing(self):
         """Handle application closing"""
         print("🔄 Shutting down Novrintech Desktop Client...")
+        
+        # Stop keep-alive systems
         self.stop_keep_alive()
+        
+        # Stop AI service and save chat
+        if hasattr(self, 'ai_service'):
+            self.ai_service.stop_ai_keepalive()
+            self.ai_service.save_ai_chat_history()
+        
+        # Stop chat database sync
+        if hasattr(self, 'chat_db_manager'):
+            self.chat_db_manager.stop_auto_sync()
+            # Force sync remaining messages
+            user_name = self.load_user_name() or "Unknown"
+            self.chat_db_manager.force_sync_all(self.chat_messages, self.ai_chat_messages, user_name)
+        
         self.root.destroy()
+    
+    def start_update_checker(self):
+        """Start automatic update checking"""
+        def update_callback(update_info):
+            # Schedule update notification in main thread
+            self.root.after(0, lambda: self.show_update_notification(update_info))
+        
+        self.updater.start_auto_update_checker(callback=update_callback)
+        print("🔄 Auto-update checker started")
+    
+    def show_update_notification(self, update_info):
+        """Show update notification in main thread"""
+        try:
+            self.update_available = True
+            
+            # Show system notification
+            self.show_notification("🔄 Update Available", 
+                                 f"Version {update_info['latest_version']} is available!")
+            
+            # Add to chat log
+            self.add_chat_message("system", "Update Available", 
+                                f"New version {update_info['latest_version']} is available for download", "System")
+            
+            # Show update dialog
+            self.updater.show_update_dialog(self.root)
+            
+        except Exception as e:
+            print(f"Update notification error: {e}")
+    
+    def start_chat_sync(self):
+        """Start chat database synchronization"""
+        try:
+            user_name = self.load_user_name() or "Unknown"
+            result = self.chat_db_manager.start_auto_sync(user_name)
+            if result["success"]:
+                print("💾 Chat database sync started")
+            else:
+                print(f"💾 Chat sync error: {result['error']}")
+        except Exception as e:
+            print(f"Chat sync initialization error: {e}")
+    
+    def manual_sync_chat(self):
+        """Manually sync chat data to database"""
+        try:
+            user_name = self.load_user_name() or "Unknown"
+            result = self.chat_db_manager.force_sync_all(self.chat_messages, self.ai_chat_messages, user_name)
+            
+            if result.get("chat_sync", {}).get("success") or result.get("ai_sync", {}).get("success"):
+                messagebox.showinfo("Sync Complete", "Chat data synchronized to database!")
+                self.add_chat_message("system", "Manual Sync", "Chat data manually synced to database", "System")
+            else:
+                error_msg = result.get("chat_sync", {}).get("error", "Unknown error")
+                messagebox.showerror("Sync Error", f"Failed to sync chat data: {error_msg}")
+                
+        except Exception as e:
+            messagebox.showerror("Sync Error", f"Sync failed: {str(e)}")
+    
+    def check_for_updates_manually(self):
+        """Manually check for updates"""
+        try:
+            result = self.updater.check_for_updates()
+            
+            if result["success"]:
+                if result["update_available"]:
+                    self.show_update_notification(result)
+                else:
+                    messagebox.showinfo("No Updates", f"You have the latest version ({result['current_version']})")
+            else:
+                messagebox.showerror("Update Check Failed", f"Could not check for updates: {result['error']}")
+                
+        except Exception as e:
+            messagebox.showerror("Update Check Error", f"Update check failed: {str(e)}")
+    
+    def show_sync_statistics(self):
+        """Show chat sync statistics"""
+        try:
+            stats = self.chat_db_manager.get_sync_statistics()
+            
+            stats_text = f"""💾 Chat Database Sync Statistics
+
+🔄 Auto-sync: {'Enabled' if stats['auto_sync_enabled'] else 'Disabled'}
+⏰ Last sync: {stats['last_sync_time'] or 'Never'}
+📊 Messages synced: {stats['total_messages_synced']}
+❌ Sync errors: {stats['sync_errors']}
+📋 Queue size: {stats['queue_size']}
+⏱️ Sync interval: {stats['sync_interval']} seconds
+🔄 Sync in progress: {'Yes' if stats['sync_in_progress'] else 'No'}
+
+{f"Last error: {stats['last_error']}" if stats['last_error'] else "No recent errors"}"""
+            
+            messagebox.showinfo("Sync Statistics", stats_text)
+            
+        except Exception as e:
+            messagebox.showerror("Statistics Error", f"Could not load statistics: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

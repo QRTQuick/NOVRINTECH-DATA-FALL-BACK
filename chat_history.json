@@ -1,23 +1,37 @@
 [
   {
-    "timestamp": "2025-12-23 10:49:17",
+    "timestamp": "2025-12-23 11:07:32",
     "type": "system",
     "title": "Application Started",
     "content": "Novrintech Data Fall Back Desktop Client v2.0 started successfully",
     "user": "System"
   },
   {
-    "timestamp": "2025-12-23 10:49:17",
+    "timestamp": "2025-12-23 11:08:50",
+    "type": "upload",
+    "title": "File Uploaded: ChatGPT Image Dec 1, 2025, 01_20_40 PM.png",
+    "content": "Successfully uploaded ChatGPT Image Dec 1, 2025, 01_20_40 PM.png to server",
+    "user": "chisom"
+  },
+  {
+    "timestamp": "2025-12-23 11:11:55",
+    "type": "download",
+    "title": "down lad",
+    "content": "i will soon download",
+    "user": "chisom"
+  },
+  {
+    "timestamp": "2025-12-23 11:15:58",
     "type": "system",
     "title": "Application Started",
     "content": "Novrintech Data Fall Back Desktop Client v2.0 started successfully",
     "user": "System"
   },
   {
-    "timestamp": "2025-12-23 10:49:17",
+    "timestamp": "2025-12-25 22:57:00",
     "type": "system",
-    "title": "Test Message",
-    "content": "This is a test message",
-    "user": "TestUser"
+    "title": "Application Started",
+    "content": "Novrintech Data Fall Back Desktop Client v2.0 started successfully",
+    "user": "System"
   }
 ]
