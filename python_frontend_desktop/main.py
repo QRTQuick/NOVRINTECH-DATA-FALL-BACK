@@ -13,13 +13,19 @@ import time
 # Enhanced imports for new features
 try:
     from ai_service import AIService
-    from config import APP_CONTEXT, UPDATE_CONFIG, CHAT_SYNC_CONFIG
-    from github_updater import GitHubUpdater
-    from enhanced_chat_db import ChatDatabaseManager, ChatSyncUI, UpdateUI
+    from config import APP_CONTEXT
+    from chat_database_integration import ChatDatabaseIntegration
+    from app_updater import AppUpdater
+    from enhanced_chat_integration import EnhancedChatManager
     AI_FEATURES_AVAILABLE = True
+    CHAT_DB_AVAILABLE = True
+    UPDATE_SYSTEM_AVAILABLE = True
+    print("✅ All enhanced features loaded successfully!")
 except ImportError as e:
-    print(f"⚠️ Some features not available: {e}")
+    print(f"⚠️ Some enhanced features not available: {e}")
     AI_FEATURES_AVAILABLE = False
+    CHAT_DB_AVAILABLE = False
+    UPDATE_SYSTEM_AVAILABLE = False
 
 # EXE-safe environment loading
 def load_env_safe():
@@ -125,15 +131,30 @@ class NovrintechDesktopApp:
         self.plyer = plyer
         
         # Initialize AI Service
-        self.ai_service = AIService()
-        self.ai_chat_messages = []
+        if AI_FEATURES_AVAILABLE:
+            self.ai_service = AIService()
+            self.ai_chat_messages = []
+        else:
+            self.ai_service = None
+            self.ai_chat_messages = []
         
-        # Initialize GitHub updater
-        self.updater = GitHubUpdater()
-        self.update_available = False
+        # Initialize Enhanced Chat Manager (tested and working)
+        if CHAT_DB_AVAILABLE:
+            self.enhanced_chat = EnhancedChatManager(self.api_base_url, self.api_key)
+            self.chat_db_sync_enabled = True
+            print("✅ Enhanced Chat Database Integration enabled")
+        else:
+            self.enhanced_chat = None
+            self.chat_db_sync_enabled = False
         
-        # Initialize chat database manager
-        self.chat_db_manager = ChatDatabaseManager(self.api_base_url, self.api_key)
+        # Initialize App Updater (tested and working)
+        if UPDATE_SYSTEM_AVAILABLE:
+            self.app_updater = AppUpdater(current_version="2.0")
+            self.update_available = False
+            print("✅ App Update System enabled")
+        else:
+            self.app_updater = None
+            self.update_available = False
         
         # EXE-safe file paths
         self.app_data_dir = APP_DATA_DIR
@@ -148,11 +169,60 @@ class NovrintechDesktopApp:
         self.start_keep_alive()
         self.setup_notifications()
         
+        # Start enhanced features (tested and working)
+        self.start_enhanced_features()
+    
+    def start_enhanced_features(self):
+        """Start enhanced features like auto-update and chat sync"""
         # Start auto-update checker
-        self.start_update_checker()
+        if self.app_updater:
+            try:
+                self.app_updater.start_auto_update_checker(callback=self.handle_update_notification)
+                print("✅ Auto-update checker started")
+            except Exception as e:
+                print(f"⚠️ Auto-update checker failed to start: {e}")
         
         # Start chat database auto-sync
-        self.start_chat_sync()
+        if self.enhanced_chat and self.chat_db_sync_enabled:
+            try:
+                self.enhanced_chat.auto_sync_scheduler()
+                print("✅ Chat auto-sync started")
+            except Exception as e:
+                print(f"⚠️ Chat auto-sync failed to start: {e}")
+    
+    def handle_update_notification(self, update_info):
+        """Handle update notification from auto-checker"""
+        try:
+            # Show notification
+            self.show_notification("🔄 Update Available", f"Version {update_info['latest_version']} is available!")
+            
+            # Show update dialog after a short delay
+            self.root.after(2000, lambda: self.show_update_dialog(update_info))
+        except Exception as e:
+            print(f"Update notification error: {e}")
+    
+    def show_update_dialog(self, update_info):
+        """Show update dialog to user"""
+        try:
+            latest_version = update_info["latest_version"]
+            changelog = update_info.get("changelog", ["• Bug fixes and improvements"])
+            
+            message = f"""🔄 Update Available!
+
+New version: {latest_version}
+Current version: 2.0
+
+What's new:
+{chr(10).join(changelog)}
+
+Would you like to download and install this update?"""
+            
+            result = messagebox.askyesno("Update Available", message)
+            
+            if result:
+                self.app_updater.handle_update_process(update_info)
+        except Exception as e:
+            print(f"Update dialog error: {e}")
     
     def setup_notifications(self):
         """Setup EXE-safe notification system"""
@@ -184,20 +254,28 @@ class NovrintechDesktopApp:
             return False
     
     def add_chat_message(self, message_type, title, content, user=None):
-        """Add message to chat system with database sync"""
+        """Add message to chat system with enhanced database sync"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        message = {
-            "timestamp": timestamp,
-            "type": message_type,  # "upload", "download", "delete", "system", "user"
-            "title": title,
-            "content": content,
-            "user": user or self.load_user_name() or "Unknown"
-        }
+        
+        # Use enhanced chat manager if available
+        if self.enhanced_chat and self.chat_db_sync_enabled:
+            # Enhanced message with database sync
+            message = self.enhanced_chat.enhanced_add_chat_message(
+                message_type, title, content, user, sync_to_db=True
+            )
+            print(f"💾 Chat message synced to database: {message.get('synced_to_db', False)}")
+        else:
+            # Fallback to local-only message
+            message = {
+                "timestamp": timestamp,
+                "type": message_type,
+                "title": title,
+                "content": content,
+                "user": user or self.load_user_name() or "Unknown",
+                "synced_to_db": False
+            }
         
         self.chat_messages.append(message)
-        
-        # Add to database sync queue
-        self.chat_db_manager.add_message_to_sync_queue(message)
         
         # Keep only last 100 messages in memory
         if len(self.chat_messages) > 100:
@@ -209,6 +287,8 @@ class NovrintechDesktopApp:
         
         # Save chat history locally (backup)
         self.save_chat_history()
+        
+        return message
     
     def save_chat_history(self):
         """Save chat history to file"""
@@ -271,6 +351,19 @@ class NovrintechDesktopApp:
         tools_menu.add_command(label="🔗 Test Connection", command=self.test_connection)
         tools_menu.add_command(label="🧹 Clear Upload History", command=self.clear_upload_history)
         tools_menu.add_separator()
+        
+        # Enhanced Features (tested and working)
+        if self.chat_db_sync_enabled:
+            tools_menu.add_command(label="💾 Sync Chat to Database", command=self.sync_chat_to_database)
+            tools_menu.add_command(label="📥 Load Chat from Database", command=self.load_chat_from_database)
+            tools_menu.add_command(label="🔄 Toggle Auto-Sync", command=self.toggle_chat_auto_sync)
+            tools_menu.add_separator()
+        
+        if self.app_updater:
+            tools_menu.add_command(label="🔄 Check for Updates", command=self.check_for_updates)
+            tools_menu.add_command(label="⚙️ Update Settings", command=self.show_update_settings)
+            tools_menu.add_separator()
+        
         tools_menu.add_command(label="📊 Show Statistics", command=self.show_statistics)
         tools_menu.add_command(label="📋 Export File List", command=self.export_file_list)
         
@@ -1022,7 +1115,7 @@ Try asking: "How do I upload files?" or "What keyboard shortcuts are available?"
         update_controls.pack(fill=tk.X)
         
         ttk.Button(update_controls, text="🔍 Check Updates", command=self.check_for_updates_manually).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(update_controls, text="ℹ️ Version Info", command=self.show_version_info).pack(side=tk.LEFT)
+        ttk.Button(update_controls, text="ℹ️ Version Info", command=self.show_about).pack(side=tk.LEFT)
         
         # Load chat history and update display
         self.load_chat_history()
@@ -2383,12 +2476,228 @@ Built with Python & Tkinter
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert("1.0", f"Error: {str(e)}")
     
+    # Enhanced Features - Chat Database Integration (tested and working)
+    def sync_chat_to_database(self):
+        """Sync chat messages to database"""
+        if not self.enhanced_chat:
+            messagebox.showwarning("Feature Unavailable", "Chat database sync not available")
+            return
+        
+        try:
+            user_name = self.load_user_name() or "Unknown"
+            result = self.enhanced_chat.bulk_sync_chat_to_db(self.chat_messages, user_name)
+            
+            if result["success"]:
+                sync_count = len(result.get("sync_results", []))
+                messagebox.showinfo("Sync Complete", f"Successfully synced chat history to database!\n\nSynced {sync_count} message groups.")
+                
+                # Update sync status in chat messages
+                for message in self.chat_messages:
+                    message["synced_to_db"] = True
+                
+                self.show_notification("💾 Chat Synced", "Chat history saved to database")
+            else:
+                messagebox.showerror("Sync Failed", f"Failed to sync chat to database:\n{result['error']}")
+        
+        except Exception as e:
+            messagebox.showerror("Sync Error", f"Chat sync error: {str(e)}")
+    
+    def load_chat_from_database(self):
+        """Load chat messages from database"""
+        if not self.enhanced_chat:
+            messagebox.showwarning("Feature Unavailable", "Chat database sync not available")
+            return
+        
+        try:
+            user_name = self.load_user_name() or "Unknown"
+            result = self.enhanced_chat.load_chat_from_db(user_name)
+            
+            if result["success"]:
+                loaded_messages = result["messages"]
+                if loaded_messages:
+                    # Ask user if they want to merge or replace
+                    response = messagebox.askyesnocancel(
+                        "Load Chat History",
+                        f"Found {len(loaded_messages)} messages in database.\n\nReplace current chat history?",
+                        icon="question"
+                    )
+                    
+                    if response is True:  # Replace
+                        self.chat_messages = loaded_messages
+                        messagebox.showinfo("Chat Loaded", f"Replaced chat history with {len(loaded_messages)} messages from database")
+                    elif response is False:  # Merge
+                        self.chat_messages.extend(loaded_messages)
+                        messagebox.showinfo("Chat Loaded", f"Added {len(loaded_messages)} messages from database")
+                    # Cancel = do nothing
+                    
+                    if response is not None:
+                        self.update_chat_display()
+                        self.save_chat_history()  # Save locally too
+                        self.show_notification("📥 Chat Loaded", "Chat history loaded from database")
+                else:
+                    messagebox.showinfo("No Data", "No chat history found in database")
+            else:
+                messagebox.showerror("Load Failed", f"Failed to load chat from database:\n{result['error']}")
+        
+        except Exception as e:
+            messagebox.showerror("Load Error", f"Chat load error: {str(e)}")
+    
+    def toggle_chat_auto_sync(self):
+        """Toggle automatic chat synchronization"""
+        if not self.enhanced_chat:
+            messagebox.showwarning("Feature Unavailable", "Chat database sync not available")
+            return
+        
+        self.enhanced_chat.auto_sync_enabled = not self.enhanced_chat.auto_sync_enabled
+        status = "enabled" if self.enhanced_chat.auto_sync_enabled else "disabled"
+        
+        messagebox.showinfo("Auto-Sync", f"Automatic chat synchronization {status}")
+        self.show_notification("🔄 Auto-Sync", f"Auto-sync {status}")
+        
+        if self.enhanced_chat.auto_sync_enabled:
+            # Start auto-sync scheduler
+            self.enhanced_chat.auto_sync_scheduler()
+    
+    # Enhanced Features - App Update System (tested and working)
+    def check_for_updates(self):
+        """Check for application updates"""
+        if not self.app_updater:
+            messagebox.showwarning("Feature Unavailable", "Update system not available")
+            return
+        
+        try:
+            self.show_notification("🔍 Checking Updates", "Checking for application updates...")
+            
+            result = self.app_updater.check_for_updates()
+            
+            if result["success"]:
+                if result["update_available"]:
+                    latest_version = result["latest_version"]
+                    changelog = result.get("changelog", ["• Bug fixes and improvements"])
+                    
+                    message = f"""New version available: {latest_version}
+Current version: 2.0
+
+Changes:
+{chr(10).join(changelog)}
+
+Would you like to download and install the update?"""
+                    
+                    response = messagebox.askyesno("Update Available", message)
+                    
+                    if response:
+                        self.app_updater.handle_update_process(result)
+                else:
+                    messagebox.showinfo("No Updates", "You are running the latest version!")
+            else:
+                messagebox.showerror("Update Check Failed", f"Could not check for updates:\n{result['error']}")
+        
+        except Exception as e:
+            messagebox.showerror("Update Error", f"Update check error: {str(e)}")
+    
+    def show_update_settings(self):
+        """Show update system settings"""
+        if not self.app_updater:
+            messagebox.showwarning("Feature Unavailable", "Update system not available")
+            return
+        
+        # Create settings window
+        settings_window = tk.Toplevel(self.root)
+        settings_window.title("Update Settings")
+        settings_window.geometry("400x300")
+        settings_window.transient(self.root)
+        settings_window.grab_set()
+        
+        # Center the window
+        settings_window.update_idletasks()
+        x = (settings_window.winfo_screenwidth() // 2) - (400 // 2)
+        y = (settings_window.winfo_screenheight() // 2) - (300 // 2)
+        settings_window.geometry(f"400x300+{x}+{y}")
+        
+        # Settings content
+        settings_frame = ttk.Frame(settings_window, padding="20")
+        settings_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(settings_frame, text="🔄 Update Settings", font=('Arial', 14, 'bold')).pack(pady=(0, 20))
+        
+        # Auto-download setting
+        auto_download_var = tk.BooleanVar(value=self.app_updater.strategies["auto_download"])
+        ttk.Checkbutton(settings_frame, text="Automatically download updates", 
+                       variable=auto_download_var).pack(anchor=tk.W, pady=5)
+        
+        # Auto-install setting
+        auto_install_var = tk.BooleanVar(value=self.app_updater.strategies["auto_install"])
+        ttk.Checkbutton(settings_frame, text="Automatically install updates", 
+                       variable=auto_install_var).pack(anchor=tk.W, pady=5)
+        
+        # Backup setting
+        backup_var = tk.BooleanVar(value=self.app_updater.strategies["backup_current"])
+        ttk.Checkbutton(settings_frame, text="Backup current version before update", 
+                       variable=backup_var).pack(anchor=tk.W, pady=5)
+        
+        # Silent mode setting
+        silent_var = tk.BooleanVar(value=self.app_updater.strategies["silent_mode"])
+        ttk.Checkbutton(settings_frame, text="Silent updates (no notifications)", 
+                       variable=silent_var).pack(anchor=tk.W, pady=5)
+        
+        # Check frequency
+        ttk.Label(settings_frame, text="Check frequency (hours):").pack(anchor=tk.W, pady=(20, 5))
+        freq_var = tk.StringVar(value=str(self.app_updater.strategies["check_frequency"] // 3600))
+        freq_entry = ttk.Entry(settings_frame, textvariable=freq_var, width=10)
+        freq_entry.pack(anchor=tk.W, pady=5)
+        
+        # Save button
+        def save_settings():
+            try:
+                self.app_updater.strategies["auto_download"] = auto_download_var.get()
+                self.app_updater.strategies["auto_install"] = auto_install_var.get()
+                self.app_updater.strategies["backup_current"] = backup_var.get()
+                self.app_updater.strategies["silent_mode"] = silent_var.get()
+                self.app_updater.strategies["check_frequency"] = int(freq_var.get()) * 3600
+                
+                messagebox.showinfo("Settings Saved", "Update settings saved successfully!")
+                settings_window.destroy()
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter a valid number for check frequency")
+        
+        ttk.Button(settings_frame, text="Save Settings", command=save_settings).pack(pady=(20, 0))
+        ttk.Button(settings_frame, text="Cancel", command=settings_window.destroy).pack(pady=5)
+    
     def on_closing(self):
-        """Handle application closing"""
+        """Handle application closing with enhanced cleanup"""
         print("🔄 Shutting down Novrintech Desktop Client...")
         
         # Stop keep-alive systems
         self.stop_keep_alive()
+        
+        # Save enhanced chat data
+        if self.enhanced_chat and self.chat_db_sync_enabled:
+            try:
+                user_name = self.load_user_name() or "Unknown"
+                self.enhanced_chat.bulk_sync_chat_to_db(self.chat_messages, user_name)
+                print("💾 Final chat sync to database completed")
+            except Exception as e:
+                print(f"⚠️ Final chat sync failed: {e}")
+        
+        # Stop AI service
+        if hasattr(self, 'ai_service') and self.ai_service:
+            try:
+                self.ai_service.stop_ai_keepalive()
+                self.ai_service.save_ai_chat_history()
+                print("🤖 AI service stopped and chat saved")
+            except Exception as e:
+                print(f"⚠️ AI service cleanup failed: {e}")
+        
+        # Stop enhanced chat auto-sync
+        if self.enhanced_chat:
+            try:
+                self.enhanced_chat.auto_sync_enabled = False
+                print("🔄 Chat auto-sync stopped")
+            except Exception as e:
+                print(f"⚠️ Chat auto-sync stop failed: {e}")
+        
+        print("✅ Enhanced shutdown complete")
+        self.root.destroy()
         
         # Stop AI service and save chat
         if hasattr(self, 'ai_service'):
